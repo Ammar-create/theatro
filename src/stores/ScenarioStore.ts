@@ -235,7 +235,7 @@ class ScenarioStore {
   async importScenario(data: any): Promise<Scenario | undefined> {
     if (!data.scenario) return undefined;
 
-    const { scenario, messages, characters } = data;
+    const { scenario, messages } = data;
 
     // Create new scenario (new ID)
     const imported = await this.create({
