@@ -1,192 +1,290 @@
-import { Component } from './Component.js';
-import { appState, scenarioStore, characterStore, appEvents } from '../stores/index.js';
-import { exportAllData } from '../core/storage.js';
+import { appEvents, appState, scenarioStore, characterStore } from '../stores/index.js';
+import { Modal } from './Modal.js';
+import { appIcons } from '../assets/icons/index.js';
+import { exportAllData, downloadJSON } from '../core/exportImport.js';
 
-export class Dashboard extends Component {
+export class Dashboard {
+  private container: HTMLElement;
+  private modal: Modal;
+
   constructor(container: HTMLElement) {
-    super(container, 'dashboard-root');
+    this.container = container;
+    this.modal = new Modal();
     this.render();
     this.setupListeners();
   }
 
-  private setupListeners() {
-    appEvents.on('scenarios:loaded', () => this.render());
-    appEvents.on('characters:loaded', () => this.render());
-  }
-
-  render() {
+  private render(): void {
     const scenarios = scenarioStore.getAll();
     const characters = characterStore.getAll();
+    const userChar = characters.find(c => c.isUser);
 
     this.container.innerHTML = `
-      <div class="dashboard-layout">
-        <aside class="dashboard-sidebar">
-          <div class="sidebar-header">
-            <div class="logo">
-              <span class="logo-icon">${this.getIcon('theatro', 24)}</span>
-              <h1>Theatro</h1>
-            </div>
+      <div class="dashboard">
+        <header class="dashboard-header">
+          <div class="logo">
+            <span class="logo-icon">🎭</span>
+            <h1>Theatro</h1>
           </div>
-          
-          <nav class="sidebar-nav">
-            <button class="nav-item active" data-view="dashboard">
-              ${this.getIcon('home', 20)}
-              <span>Scenarios</span>
-            </button>
-            <button class="nav-item" data-view="characters">
-              ${this.getIcon('users', 20)}
-              <span>Characters</span>
-            </button>
-            <button class="nav-item" data-view="settings">
-              ${this.getIcon('settings', 20)}
-              <span>Settings</span>
-            </button>
-          </nav>
-
-          <div class="sidebar-footer">
-            <button class="btn btn-ghost btn-block" id="btn-export">
-              ${this.getIcon('download', 18)}
-              <span>Export Data</span>
-            </button>
-            <button class="btn btn-ghost btn-block" id="btn-import">
-              ${this.getIcon('upload', 18)}
-              <span>Import Data</span>
+          <div class="header-actions">
+            <button class="btn-settings" id="btn-settings" title="Settings">
+              ${appIcons.settings({ size: 20 })}
             </button>
           </div>
-        </aside>
-
+        </header>
+        
         <main class="dashboard-content">
-          <header class="content-header">
-            <div class="header-titles">
-              <h2>My Scenarios</h2>
-              <p>Continue your stories or create a new arc.</p>
-            </div>
-            <button class="btn btn-primary" id="btn-new-scenario">
-              ${this.getIcon('plus', 18)}
-              <span>Create Scenario</span>
-            </button>
-          </header>
-
-          <div class="scenario-grid">
-            ${scenarios.length ? scenarios.map(s => this.renderScenarioCard(s)).join('') : this.renderEmptyState('scenarios')}
-          </div>
-
-          <section class="character-section">
-            <header class="section-header">
-              <div class="header-titles">
-                <h3>Characters</h3>
-                <p>Manage your cast of actors.</p>
-              </div>
-              <button class="btn btn-outline" id="btn-new-character">
-                ${this.getIcon('user-plus', 18)}
-                <span>New Character</span>
+          <!-- Scenarios Section -->
+          <section class="dashboard-section">
+            <div class="section-header">
+              <h2>Scenarios</h2>
+              <button class="btn-primary" id="btn-new-scenario">
+                ${appIcons.plus({ size: 16 })}
+                New Scenario
               </button>
-            </header>
-            <div class="character-list">
-              ${characters.length ? characters.map(c => this.renderCharacterCard(c)).join('') : this.renderEmptyState('characters')}
+            </div>
+            <div class="scenario-grid">
+              ${scenarios.length === 0 ? `
+                <div class="empty-state">
+                  <p>No scenarios yet</p>
+                  <span>Create your first story world</span>
+                </div>
+              ` : scenarios.map(s => `
+                <div class="scenario-card" data-scenario-id="${s.id}">
+                  <div class="scenario-info">
+                    <h3>${s.name}</h3>
+                    <p>${s.characterIds.length} characters</p>
+                  </div>
+                  <div class="scenario-actions">
+                    <button class="btn-enter">Enter</button>
+                    <button class="btn-menu" data-action="menu">${appIcons.more({ size: 16 })}</button>
+                  </div>
+                </div>
+              `).join('')}
             </div>
           </section>
+          
+          <!-- Characters Section -->
+          <section class="dashboard-section">
+            <div class="section-header">
+              <h2>Characters</h2>
+              <button class="btn-secondary" id="btn-new-character">
+                ${appIcons.plus({ size: 16 })}
+                New Character
+              </button>
+            </div>
+            <div class="character-list">
+              ${characters.length === 0 ? `
+                <div class="empty-state">
+                  <p>No characters yet</p>
+                </div>
+              ` : characters.map(c => `
+                <div class="character-item ${c.isUser ? 'is-user' : ''}" data-char-id="${c.id}">
+                  <div class="char-avatar" style="background: ${c.color}20; border-color: ${c.color}">
+                    ${c.avatar ? `<img src="${c.avatar}" />` : `<span style="color: ${c.color}">${c.name[0]}</span>`}
+                  </div>
+                  <div class="char-info">
+                    <h4>${c.name} ${c.isUser ? '(You)' : ''}</h4>
+                    <p>${c.personality.slice(0, 60)}...</p>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </section>
+          
+          ${!userChar ? `
+            <div class="banner">
+              <span>Tip: Create a character and mark "This is me" to join scenarios</span>
+            </div>
+          ` : ''}
         </main>
       </div>
     `;
-
-    this.bindEvents();
   }
 
-  private renderScenarioCard(scenario: any) {
-    return `
-      <div class="scenario-card" data-id="${scenario.id}">
-        <div class="card-glow" style="background: ${this.getScenarioColor(scenario)}"></div>
-        <div class="card-content">
-          <h3>${scenario.name}</h3>
-          <p>${scenario.lore.slice(0, 80)}...</p>
-          <div class="card-meta">
-            <span>${scenario.characterIds.length} Characters</span>
-            <span>${new Date(scenario.updatedAt).toLocaleDateString()}</span>
-          </div>
-        </div>
-        <div class="card-actions">
-          <button class="btn-icon btn-start" title="Play">
-            ${this.getIcon('play', 20)}
-          </button>
-        </div>
-      </div>
-    `;
-  }
+  private setupListeners(): void {
+    // Settings
+    this.container.querySelector('#btn-settings')?.addEventListener('click', () => {
+      appState.setView('settings');
+    });
 
-  private renderCharacterCard(character: any) {
-    return `
-      <div class="character-card" data-id="${character.id}">
-        <div class="char-avatar" style="border-color: ${character.color}">
-          ${character.avatar ? `<img src="${character.avatar}" />` : this.getIcon('user', 24)}
-        </div>
-        <div class="char-info">
-          <h4>${character.name}</h4>
-          <span class="char-model">${character.modelId}</span>
-        </div>
-        <button class="btn-icon">
-          ${this.getIcon('edit', 18)}
-        </button>
-      </div>
-    `;
-  }
+    // New scenario
+    this.container.querySelector('#btn-new-scenario')?.addEventListener('click', () => {
+      const chars = characterStore.getAll();
+      if (chars.length === 0) {
+        appEvents.emit('toast', { message: 'Create a character first!', type: 'warning' });
+        return;
+      }
+      this.showNewScenarioModal(chars);
+    });
 
-  private renderEmptyState(type: string) {
-    return `
-      <div class="empty-state">
-        <div class="empty-icon">${this.getIcon(type === 'scenarios' ? 'film' : 'users', 48)}</div>
-        <p>No ${type} found. Start by creating one!</p>
-      </div>
-    `;
-  }
+    // New character
+    this.container.querySelector('#btn-new-character')?.addEventListener('click', () => {
+      this.showNewCharacterModal();
+    });
 
-  private bindEvents() {
-    this.container.querySelectorAll('.scenario-card').forEach(el => {
-      el.addEventListener('click', () => {
-        const id = el.getAttribute('data-id');
-        if (id) scenarioStore.setActive(id);
+    // Enter scenario
+    this.container.querySelectorAll('.scenario-card').forEach(card => {
+      card.querySelector('.btn-enter')?.addEventListener('click', () => {
+        const id = (card as HTMLElement).dataset.scenarioId;
+        const scenario = scenarioStore.get(id!);
+        if (scenario) {
+          appState.setView('chat', scenario);
+        }
       });
     });
+  }
 
-    this.container.querySelector('#btn-export')?.addEventListener('click', async () => {
-      const data = await exportAllData();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `theatro-backup-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-    });
+  private showNewScenarioModal(characters: any[]): void {
+    const userChar = characters.find(c => c.isUser);
+    const otherChars = characters.filter(c => !c.isUser);
 
-    this.container.querySelector('#btn-import')?.addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json';
-      input.onchange = async (e: any) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (re: any) => {
-          try {
-            const data = JSON.parse(re.target.result);
-            // Handle import logic
-            appEvents.emit('toast', { message: 'Import successful', type: 'success' });
-            window.location.reload();
-          } catch (err) {
-            appEvents.emit('toast', { message: 'Invalid file format', type: 'error' });
-          }
-        };
-        reader.readAsText(file);
-      };
-      input.click();
+    this.modal.show({
+      title: 'Create New Scenario',
+      content: `
+        <div class="form-group">
+          <label>Scenario Name</label>
+          <input type="text" id="scenario-name" placeholder="e.g., The Midnight Train" />
+        </div>
+        <div class="form-group">
+          <label>Lore / Setting</label>
+          <textarea id="scenario-lore" rows="4" placeholder="Describe the world, time period, circumstances..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Characters</label>
+          <div class="character-select">
+            ${characters.map(c => `
+              <label class="char-checkbox">
+                <input type="checkbox" value="${c.id}" ${c.isUser ? 'checked disabled' : ''} />
+                <span style="color: ${c.color}">${c.name}</span>
+                ${c.isUser ? '<small>(You)</small>' : ''}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="ai-knows-user" ${userChar ? '' : 'disabled'} />
+            <span>AI characters know who the real user is</span>
+          </label>
+        </div>
+      `,
+      confirmText: 'Create Scenario',
+      confirmClass: 'btn-primary',
+      onConfirm: async () => {
+        const name = (document.querySelector('#scenario-name') as HTMLInputElement)?.value;
+        const lore = (document.querySelector('#scenario-lore') as HTMLTextAreaElement)?.value;
+        const aiKnows = (document.querySelector('#ai-knows-user') as HTMLInputElement)?.checked;
+
+        if (!name) {
+          appEvents.emit('toast', { message: 'Name required', type: 'warning' });
+          return false;
+        }
+
+        const charIds: string[] = [];
+        document.querySelectorAll('.char-checkbox input:checked').forEach((el: any) => {
+          charIds.push(el.value);
+        });
+
+        if (charIds.length < 2) {
+          appEvents.emit('toast', { message: 'Select at least 2 characters', type: 'warning' });
+          return false;
+        }
+
+        const scenario = await scenarioStore.create({
+          name,
+          lore,
+          characterIds: charIds,
+          settings: { aiKnowsUser: aiKnows }
+        });
+
+        appEvents.emit('toast', { message: `Created "${name}"`, type: 'success' });
+        this.render();
+        this.setupListeners();
+      }
     });
   }
 
-  private getScenarioColor(scenario: any) {
-    return '#8b5cf6'; // Default, could be derived from first character
+  private showNewCharacterModal(): void {
+    const colors = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'];
+
+    this.modal.show({
+      title: 'Create Character',
+      content: `
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="char-name" placeholder="Character name" />
+        </div>
+        <div class="form-group">
+          <label>Color</label>
+          <div class="color-picker">
+            ${colors.map(c => `
+              <button class="color-btn" data-color="${c}" style="background: ${c}"></button>
+            `).join('')}
+          </div>
+          <input type="hidden" id="char-color" value="${colors[0]}" />
+        </div>
+        <div class="form-group">
+          <label>Personality</label>
+          <textarea id="char-personality" rows="3" placeholder="Who are they? What drives them?"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Appearance</label>
+          <textarea id="char-appearance" rows="2" placeholder="Physical description, clothing, distinguishing marks..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="char-is-user" />
+            <span>This is me (my character)</span>
+          </label>
+        </div>
+      `,
+      confirmText: 'Create Character',
+      confirmClass: 'btn-primary',
+      onConfirm: async () => {
+        const name = (document.querySelector('#char-name') as HTMLInputElement)?.value;
+        const color = (document.querySelector('#char-color') as HTMLInputElement)?.value;
+        const personality = (document.querySelector('#char-personality') as HTMLTextAreaElement)?.value;
+        const appearance = (document.querySelector('#char-appearance') as HTMLTextAreaElement)?.value;
+        const isUser = (document.querySelector('#char-is-user') as HTMLInputElement)?.checked;
+
+        if (!name || !personality) {
+          appEvents.emit('toast', { message: 'Name and personality required', type: 'warning' });
+          return false;
+        }
+
+        if (isUser) {
+          await characterStore.setAsUser(''); // Unset existing
+        }
+
+        await characterStore.create({
+          name,
+          color,
+          personality,
+          appearance,
+          isUser
+        });
+
+        appEvents.emit('toast', { message: `Created ${name}`, type: 'success' });
+        this.render();
+        this.setupListeners();
+      }
+    });
+
+    // Color picker
+    setTimeout(() => {
+      document.querySelectorAll('.color-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          (document.querySelector('#char-color') as HTMLInputElement)!.value = (btn as HTMLElement).dataset.color!;
+        });
+      });
+    }, 10);
   }
 
-  private getIcon(name: string, size: number) {
-    return `<svg width="${size}" height="${size}"><use href="#icon-${name}"></use></svg>`;
+  destroy(): void {
+    this.modal.destroy();
+    this.container.innerHTML = '';
   }
 }

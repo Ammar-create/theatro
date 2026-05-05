@@ -1,32 +1,37 @@
-// ===== BASE COMPONENT =====
+// ===== BASE COMPONENT CLASS =====
 export abstract class Component {
   protected element: HTMLElement;
-  protected parent: HTMLElement;
-  protected isDestroyed = false;
+  protected listeners: Map<HTMLElement, Map<string, Function>> = new Map();
 
-  constructor(parent: HTMLElement, tag = 'div', className = '') {
-    this.parent = parent;
-    this.element = document.createElement(tag);
-    if (className) {
-      this.element.className = className;
+  constructor(element: HTMLElement) {
+    this.element = element;
+  }
+
+  protected attachEvent(
+    target: HTMLElement, 
+    event: string, 
+    handler: EventListener
+  ): void {
+    if (!this.listeners.has(target)) {
+      this.listeners.set(target, new Map());
     }
-    parent.appendChild(this.element);
+    target.addEventListener(event, handler as EventListener);
+    this.listeners.get(target)!.set(event, handler);
   }
 
-  protected abstract render(): void;
-  
-  protected onMount(): void {}
-  
-  protected onUnmount(): void {}
+  protected removeAllListeners(): void {
+    this.listeners.forEach((handlers, target) => {
+      handlers.forEach((handler, event) => {
+        target.removeEventListener(event, handler as EventListener);
+      });
+    });
+    this.listeners.clear();
+  }
 
+  abstract render(): void;
+  
   destroy(): void {
-    if (this.isDestroyed) return;
-    this.onUnmount();
-    this.element.remove();
-    this.isDestroyed = true;
-  }
-
-  getElement(): HTMLElement {
-    return this.element;
+    this.removeAllListeners();
+    this.element.innerHTML = '';
   }
 }
