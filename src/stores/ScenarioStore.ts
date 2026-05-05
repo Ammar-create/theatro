@@ -27,10 +27,14 @@ class ScenarioStore {
     appEvents.emit('scenarios:loaded', this.getAll());
   }
 
-  get all(): Scenario[] {
+  getAll(): Scenario[] {
     return Array.from(this.scenarios.values()).sort((a, b) => 
       (b.lastMessageAt || b.createdAt) - (a.lastMessageAt || a.createdAt)
     );
+  }
+
+  getMessages(scenarioId: string): Promise<Message[]> {
+    return getMessagesForScenario(scenarioId, 1000);
   }
 
   get(id: string): Scenario | undefined {
@@ -208,7 +212,7 @@ class ScenarioStore {
 
   // ===== IMPORT/EXPORT =====
 
-  async exportScenario(id: string): Promise<object | null> {
+  async exportScenario(id: string): Promise<unknown | null> {
     const scenario = this.scenarios.get(id);
     if (!scenario) return null;
 
@@ -227,14 +231,15 @@ class ScenarioStore {
     };
   }
 
-  async exportAll(): Promise<object> {
+  async exportAll(): Promise<unknown> {
     return exportAllData();
   }
 
-  async importScenario(data: any): Promise<Scenario | undefined> {
-    if (!data.scenario) return undefined;
+  async importScenario(data: unknown): Promise<Scenario | undefined> {
+    const importData = data as { scenario?: Scenario; messages?: Message[]; characters?: Character[] };
+    if (!importData.scenario) return undefined;
 
-    const { scenario, messages, characters } = data;
+    const { scenario, messages, characters } = importData;
 
     // Create new scenario (new ID)
     const imported = await this.create({
@@ -262,9 +267,17 @@ class ScenarioStore {
     return imported;
   }
 
-  async importAll(data: any): Promise<boolean> {
+  async importAll(data: unknown): Promise<boolean> {
     try {
-      await importAllData(data);
+      await importAllData(data as {
+        characters: Character[];
+        scenarios: Scenario[];
+        messages: Message[];
+        memories: unknown[];
+        relationships: unknown[];
+        providers: unknown[];
+        settings: Record<string, unknown>;
+      });
       await this.load(); // Reload all scenarios
       await characterStore.load(); // Reload all characters
       appEvents.emit('data:imported');
@@ -285,6 +298,38 @@ class ScenarioStore {
     this.scenarios.clear();
     this.currentScenario = null;
     this.isLoaded = false;
+  }
+
+  toggleAutoScenario(): boolean {
+    const scenario = this.currentScenario;
+    if (!scenario) return false;
+    
+    const newState = !scenario.settings.autoScenario;
+    this.update(scenario.id, {
+      settings: { ...scenario.settings, autoScenario: newState }
+    });
+    return newState;
+  }
+
+  async sendUserMessage(content: string, dialogue: string, actions: string[]): Promise<void> {
+    const scenario = this.currentScenario;
+    if (!scenario) return;
+
+    const userChar = await characterStore.getUserCharacter();
+    if (!userChar) return;
+
+    const message: Message = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      scenarioId: scenario.id,
+      characterId: userChar.id,
+      content,
+      dialogue,
+      actions,
+      timestamp: Date.now()
+    };
+
+    await saveMessage(message);
+    appEvents.emit('message:new', message);
   }
 }
 
