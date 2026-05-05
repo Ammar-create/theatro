@@ -1,6 +1,7 @@
 import { 
   Provider, Model, ChatParams, StreamingChunk 
 } from '../types/index.js';
+import { getDB } from '../core/storage.js';
 
 export interface ProviderAdapter {
   readonly provider: Provider;
@@ -76,9 +77,10 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
         buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.trim() === '' || line.trim() === 'data: [DONE]') continue;
+          const trimmed = line.trim();
+          if (trimmed === '' || trimmed === 'data: [DONE]') continue;
           
-          const data = line.replace(/^data: /, '');
+          const data = trimmed.replace(/^data: /, '');
           try {
             const chunk = JSON.parse(data);
             const delta = chunk.choices?.[0]?.delta;
@@ -157,4 +159,38 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
 
 export function createProviderAdapter(provider: Provider): ProviderAdapter {
   return new OpenAICompatibleAdapter(provider);
+}
+
+export async function getDefaultProvider(): Promise<Provider | undefined> {
+  const db = await getDB();
+  const tx = db.transaction('providers', 'readonly');
+  const index = tx.store.index('by-default');
+  const providers = await index.getAll(IDBKeyRange.only(1));
+  return providers[0];
+}
+
+export async function streamChat(params: ChatParams, providerId: string): Promise<AsyncGenerator<StreamingChunk>> {
+  const db = await getDB();
+  const provider = await db.get('providers', providerId);
+  if (!provider) throw new Error(`Provider not found: ${providerId}`);
+  const adapter = createProviderAdapter(provider);
+  return adapter.streamChat(params);
+}
+
+export async function generateImage(prompt: string, providerId: string = 'pollinations-p'): Promise<string> {
+  const db = await getDB();
+  const provider = await db.get('providers', providerId);
+  if (!provider) throw new Error(`Provider not found: ${providerId}`);
+  const adapter = createProviderAdapter(provider);
+  if (!adapter.generateImage) throw new Error('Image generation not supported');
+  return adapter.generateImage(prompt);
+}
+
+export async function generateVoice(text: string, voice?: string, providerId: string = 'pollinations-p'): Promise<string> {
+  const db = await getDB();
+  const provider = await db.get('providers', providerId);
+  if (!provider) throw new Error(`Provider not found: ${providerId}`);
+  const adapter = createProviderAdapter(provider);
+  if (!adapter.generateVoice) throw new Error('Voice generation not supported');
+  return adapter.generateVoice(text, voice);
 }
