@@ -130,13 +130,18 @@ export class TurnQueueManager {
       content: this.formatMessageForPrompt(m)
     }));
     
+    // Pass the directive string as a mood hint if present
+    const directiveHint = item.directive
+      ? { type: 'mood' as const, characterId: character.id, mood: item.directive, reason: '', intensity: 5 }
+      : undefined;
+    
     const prompt = await buildCharacterPrompt(
       character,
       this.scenario,
       memory,
       relationshipMatrix,
       recentMessages,
-      item.directive
+      directiveHint
     );
     
     const streamingId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -144,7 +149,6 @@ export class TurnQueueManager {
     
     let fullContent = '';
     try {
-      // streamChat returns Promise<AsyncGenerator> — await it first
       const generator = await streamChat({
         model: character.modelId,
         messages: [{ role: 'system', content: prompt }, ...apiMessages],
