@@ -1,7 +1,8 @@
 // ===== CORE ICONS - PART 2: Controller & Settings =====
-import type { IconProps } from './part1';
+import type { IconProps } from './part1.js';
 
-export { IconProps, renderIcon, characterColorStyle, characterColorClass } from './part1';
+export type { IconProps } from './part1.js';
+export { renderIcon, characterColorStyle, characterColorClass } from './part1.js';
 
 // Controller/Debug
 export const cpu = ({ width = 24, height = 24, color = 'currentColor', strokeWidth = 2 }: IconProps = {}) =>
