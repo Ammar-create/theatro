@@ -40,6 +40,8 @@ export interface ScenarioSettings {
   controllerCheckFrequency: number;
   shortTermMemorySize: number;
   privateChannels: PrivateChannel[];
+  whatNext?: string;
+  briefDetails?: string;
 }
 
 export interface PrivateChannel {
@@ -205,6 +207,7 @@ export interface TurnQueueItem {
   content?: string;
   actions?: string[];
   dialogue?: string;
+  directive?: string;
   timestamp: number;
 }
 
@@ -237,5 +240,5 @@ export interface ExportData {
   memories: Memory[];
   relationships: RelationshipMatrix[];
   providers: Provider[];
-  settings: Record<string, any>;
+  settings: Record<string, unknown>;
 }
