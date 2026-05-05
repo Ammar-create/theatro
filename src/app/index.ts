@@ -1,1 +1,3 @@
-export * from './App.js';
+import { ChatView } from './ChatView.js';
+
+export { ChatView };
