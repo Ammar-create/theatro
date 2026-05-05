@@ -4,7 +4,7 @@ import {
 } from '../core/storage.js';
 import { Character } from '../types/index.js';
 import { appEvents } from './index.js';
-import { generateImage } from './providers.js';
+import { generateImage } from '../services/providers.js';
 
 class CharacterStore {
   private characters: Map<string, Character> = new Map();
@@ -76,7 +76,6 @@ class CharacterStore {
   }
 
   async setAsUser(id: string): Promise<void> {
-    // Unset any existing user character
     for (const [charId, char] of this.characters) {
       if (char.isUser) {
         const updated = { ...char, isUser: false };
@@ -85,7 +84,6 @@ class CharacterStore {
       }
     }
 
-    // Set new user character
     const char = this.characters.get(id);
     if (char) {
       const updated = { ...char, isUser: true };
