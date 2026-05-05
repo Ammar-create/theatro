@@ -135,6 +135,7 @@ export class SettingsView {
   }
 
   private renderProvidersTab(): string {
+    const settings = settingsStore.getAll();
     const providers = providerStore.getAll();
     const pollinationP = providers.find(p => p.type === 'pollinations');
     const aquaP = providers.find(p => p.type === 'aqua');
