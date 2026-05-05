@@ -1,4 +1,4 @@
-import { getDB, getSetting, setSetting } from '../core/storage.js';
+import { getSetting, setSetting } from '../core/storage.js';
 import { appEvents } from './appState.js';
 
 interface SettingsCache {
