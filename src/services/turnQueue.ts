@@ -1,8 +1,5 @@
 // ===== TURN QUEUE MANAGER =====
-import { 
-  TurnQueueItem, Message, Character, Scenario, 
-  RelationshipMatrix 
-} from '../types/index.js';
+import { TurnQueueItem, Message, Character, Scenario } from '../types/index.js';
 import { 
   saveMessage, getMessagesForScenario, 
   getMemory, saveMemory, getRelationshipMatrix, 
