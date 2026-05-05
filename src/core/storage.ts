@@ -3,46 +3,16 @@ import {
   Character, Scenario, Message, Memory, RelationshipMatrix,
   Provider
 } from '../types/index.js';
+import { initializeProviders } from '../services/providers.js';
 
 interface TheatroDB extends DBSchema {
-  characters: {
-    key: string;
-    value: Character;
-    indexes: { 'by-updated': number; 'by-is-user': number };
-  };
-  scenarios: {
-    key: string;
-    value: Scenario;
-    indexes: { 'by-updated': number; 'by-parent': string };
-  };
-  messages: {
-    key: string;
-    value: Message;
-    indexes: { 
-      'by-scenario': string; 
-      'by-scenario-time': [string, number];
-      'by-character': string;
-    };
-  };
-  memories: {
-    key: [string, string];
-    value: Memory;
-    indexes: { 'by-scenario': string };
-  };
-  relationships: {
-    key: string;
-    value: RelationshipMatrix;
-    indexes: { 'by-updated': number };
-  };
-  providers: {
-    key: string;
-    value: Provider;
-    indexes: { 'by-default': number };
-  };
-  settings: {
-    key: string;
-    value: any;
-  };
+  characters: { key: string; value: Character; indexes: { 'by-updated': number; 'by-is-user': number } };
+  scenarios: { key: string; value: Scenario; indexes: { 'by-updated': number; 'by-parent': string } };
+  messages: { key: string; value: Message; indexes: { 'by-scenario': string; 'by-scenario-time': [string, number]; 'by-character': string } };
+  memories: { key: [string, string]; value: Memory; indexes: { 'by-scenario': string } };
+  relationships: { key: string; value: RelationshipMatrix; indexes: { 'by-updated': number } };
+  providers: { key: string; value: Provider; indexes: { 'by-default': number } };
+  settings: { key: string; value: any };
 }
 
 const DB_NAME = 'theatro-db';
@@ -71,9 +41,7 @@ export function getDB(): Promise<IDBPDatabase<TheatroDB>> {
           msgStore.createIndex('by-character', 'characterId');
         }
         if (!db.objectStoreNames.contains('memories')) {
-          const memStore = db.createObjectStore('memories', { 
-            keyPath: ['characterId', 'scenarioId'] 
-          });
+          const memStore = db.createObjectStore('memories', { keyPath: ['characterId', 'scenarioId'] });
           memStore.createIndex('by-scenario', 'scenarioId');
         }
         if (!db.objectStoreNames.contains('relationships')) {
@@ -105,8 +73,8 @@ export async function getCharacter(id: string): Promise<Character | undefined> {
 
 export async function getUserCharacter(): Promise<Character | undefined> {
   const db = await getDB();
-  const userChars = await db.getAllFromIndex('characters', 'by-is-user', 1);
-  return userChars[0];
+  const chars = await db.getAllFromIndex('characters', 'by-is-user', 1);
+  return chars[0];
 }
 
 export async function saveCharacter(character: Character): Promise<void> {
@@ -136,16 +104,13 @@ export async function saveScenario(scenario: Scenario): Promise<void> {
   await db.put('scenarios', scenario);
 }
 
-export async function getMessagesForScenario(
-  scenarioId: string, 
-  limit: number = 100
-): Promise<Message[]> {
+export async function getMessagesForScenario(scenarioId: string, limit = 100): Promise<Message[]> {
   const db = await getDB();
   const tx = db.transaction('messages', 'readonly');
   const index = tx.store.index('by-scenario-time');
   const range = IDBKeyRange.bound([scenarioId, 0], [scenarioId, Infinity]);
-  const messages = await index.getAll(range, limit);
-  return messages.reverse();
+  const msgs = await index.getAll(range, limit);
+  return msgs.reverse();
 }
 
 export async function saveMessage(message: Message): Promise<void> {
@@ -153,10 +118,7 @@ export async function saveMessage(message: Message): Promise<void> {
   await db.put('messages', message);
 }
 
-export async function getMemory(
-  characterId: string, 
-  scenarioId: string
-): Promise<Memory | undefined> {
+export async function getMemory(characterId: string, scenarioId: string): Promise<Memory | undefined> {
   const db = await getDB();
   return db.get('memories', [characterId, scenarioId]);
 }
@@ -167,9 +129,7 @@ export async function saveMemory(memory: Memory): Promise<void> {
   await db.put('memories', memory);
 }
 
-export async function getRelationshipMatrix(
-  scenarioId: string
-): Promise<RelationshipMatrix | undefined> {
+export async function getRelationshipMatrix(scenarioId: string): Promise<RelationshipMatrix | undefined> {
   const db = await getDB();
   return db.get('relationships', scenarioId);
 }
@@ -210,62 +170,15 @@ export async function setSetting(key: string, value: any): Promise<void> {
 export async function initializeDefaults(): Promise<void> {
   const db = await getDB();
   const existingProviders = await db.getAll('providers');
-  if (existingProviders.length > 0) return;
-
-  const defaultProvider: Provider = {
-    id: 'pollinations-p',
-    name: 'Pollinations',
-    baseUrl: 'https://gen.pollinations.ai/v1',
-    apiKey: 'pk-pollinations-free',
-    isDefault: true,
-    type: 'pollinations'
-  };
-  await db.put('providers', defaultProvider);
-
-  await db.put('settings', 'dark', 'global-theme');
-  await db.put('settings', 'en', 'global-language');
-  await db.put('settings', false, 'global-debug-mode');
-  await db.put('settings', 11, 'global-max-characters');
-}
-
-export interface ExportData {
-  version: string;
-  exportedAt: number;
-  characters: Character[];
-  scenarios: Scenario[];
-  messages: Message[];
-  memories: Memory[];
-  relationships: RelationshipMatrix[];
-  providers: Provider[];
-  settings: Record<string, any>;
-}
-
-export async function exportAllData(): Promise<ExportData> {
-  const db = await getDB();
-  const [characters, scenarios, messages, memories, relationships, providers] = await Promise.all([
-    db.getAll('characters'),
-    db.getAll('scenarios'),
-    db.getAll('messages'),
-    db.getAll('memories'),
-    db.getAll('relationships'),
-    db.getAll('providers'),
-  ]);
-
-  const settingsKeys = await db.getAllKeys('settings');
-  const settings: Record<string, any> = {};
-  for (const key of settingsKeys) {
-    settings[key as string] = await db.get('settings', key);
+  
+  if (existingProviders.length === 0) {
+    // Initialize providers with embedded key
+    await initializeProviders();
   }
 
-  return {
-    version: '1.0',
-    exportedAt: Date.now(),
-    characters,
-    scenarios,
-    messages,
-    memories,
-    relationships,
-    providers,
-    settings
-  };
+  // Initialize default settings if not present
+  const hasTheme = await db.get('settings', 'theme');
+  if (!hasTheme) {
+    await db.put('settings', 'dark', 'theme');
+  }
 }
