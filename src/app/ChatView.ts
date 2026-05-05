@@ -1,29 +1,25 @@
-import type { Character, Scenario, Message, MessageAction, ControllerDirective } from '../types/index.js';
+// ===== CHAT VIEW - Main Chat Interface =====
+import type { Character, Scenario, Message } from '../types/index.js';
 import { 
-  messageStore, 
   scenarioStore, 
-  characterStore,
-  settingsStore,
+  characterStore, 
+  chatStore,
   appEvents 
 } from '../stores/index.js';
-import { renderIcon, ICONS, characterColorStyle, characterColorClass } from '../assets/icons/index.js';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import { renderIcon, ICONS } from '../assets/icons/index.js';
+import { SidePanel } from './SidePanel.js';
 
 export class ChatView {
   private container: HTMLElement;
   private scenario: Scenario;
   private characters: Map<string, Character> = new Map();
   private userCharacter: Character | null = null;
-  private messagesContainer: HTMLElement | null = null;
-  private inputArea: HTMLElement | null = null;
-  private sidePanel: HTMLElement | null = null;
+  private sidePanel: SidePanel | null = null;
   private isSidePanelOpen = false;
   private isAutoScenario = false;
-  private isRecording = false;
-  private activeTab: 'next' | 'details' | 'matrix' | 'memory' | 'debug' | 'scene' = 'next';
   private streamingMessageId: string | null = null;
   private unsubscribeFns: Array<() => void> = [];
+  private messagesContainer: HTMLElement | null = null;
 
   constructor(container: HTMLElement, scenario: Scenario) {
     this.container = container;
@@ -36,10 +32,11 @@ export class ChatView {
 
   destroy() {
     this.unsubscribeFns.forEach(fn => fn());
+    this.sidePanel?.destroy();
   }
 
   private loadCharacters() {
-    this.userCharacter = characterStore.user;
+    this.userCharacter = characterStore.getUserCharacter();
     this.scenario.characterIds.forEach(id => {
       const char = characterStore.get(id);
       if (char) this.characters.set(id, char);
@@ -48,16 +45,24 @@ export class ChatView {
 
   private setupEventListeners() {
     this.unsubscribeFns.push(
-      appEvents.on('messages:added', (message: Message) => {
+      appEvents.on('message:new', (message: Message) => {
         if (message.scenarioId === this.scenario.id) {
           this.appendMessage(message);
-          this.scrollToBottom();
         }
       }),
-      appEvents.on('messages:updated', (message: Message) => {
-        if (message.scenarioId === this.scenario.id) {
-          this.updateMessage(message);
-        }
+      appEvents.on('streaming:start', ({ messageId, characterId }: { messageId: string; characterId: string }) => {
+        this.streamingMessageId = messageId;
+        this.showTypingIndicator(messageId, characterId);
+      }),
+      appEvents.on('streaming:chunk', ({ messageId, chunk }: { messageId: string; chunk: string }) => {
+        this.updateStreamingMessage(messageId, chunk);
+      }),
+      appEvents.on('streaming:end', ({ messageId, content }: { messageId: string; content: string }) => {
+        this.finalizeStreamingMessage(messageId, content);
+        this.streamingMessageId = null;
+      }),
+      appEvents.on('streaming:error', ({ messageId, error }: { messageId: string; error: Error }) => {
+        this.handleStreamingError(messageId, error);
       })
     );
 
@@ -87,46 +92,56 @@ export class ChatView {
             </div>
             ${this.renderInputArea()}
           </div>
-          ${this.renderSidePanel()}
+          <div class="side-panel-container" id="side-panel-container"></div>
         </div>
       </div>
     `;
 
+    // Initialize side panel in its container
+    const sidePanelContainer = this.container.querySelector('#side-panel-container');
+    if (sidePanelContainer) {
+      this.sidePanel = new SidePanel(sidePanelContainer as HTMLElement, this.scenario);
+    }
+
     this.attachEventHandlers();
     this.messagesContainer = this.container.querySelector('#messages-container');
-    this.inputArea = this.container.querySelector('.input-area');
-    this.sidePanel = this.container.querySelector('.side-panel');
   }
 
   private renderHeader(): string {
     const characterPills = Array.from(this.characters.values()).map(c => `
-      <div class="character-pill" style="border-color: ${c.color}">
-        <span class="pill-color" style="background: ${c.color}"></span>
-        <span>${this.escapeHtml(c.name)}</span>
+      <div class="character-pill" style="--char-color: ${c.color}">
+        <span class="pill-avatar" style="background: ${c.color}30; color: ${c.color}">
+          ${c.avatar ? `<img src="${c.avatar}" alt="">` : c.name.charAt(0).toUpperCase()}
+        </span>
+        <span class="pill-name">${this.escapeHtml(c.name)}</span>
       </div>
     `).join('');
 
     return `
       <header class="chat-header">
-        <div class="header-scenario-info">
+        <div class="header-left">
           <button class="header-btn" id="back-btn" title="Back to Dashboard">
             ${renderIcon(ICONS.arrowLeft, 18, 18)}
           </button>
           <div class="scenario-title-group">
             <h1 class="scenario-title">${this.escapeHtml(this.scenario.name)}</h1>
             <div class="scenario-meta">
-              <span>${this.characters.size + (this.userCharacter ? 1 : 0)} participants</span>
-              <span>•</span>
-              <span>${this.scenario.isActive ? 'Active' : 'Paused'}</span>
+              <span class="meta-participants">${this.characters.size + (this.userCharacter ? 1 : 0)} participants</span>
+              <span class="meta-dot">•</span>
+              <span class="meta-status ${this.scenario.isActive ? 'status-active' : 'status-paused'}">
+                ${this.scenario.isActive ? 'Active' : 'Paused'}
+              </span>
             </div>
           </div>
         </div>
         <div class="character-pills">
           ${characterPills}
           ${this.userCharacter ? `
-            <div class="character-pill user-pill">
-              <span class="pill-color" style="background: ${this.userCharacter.color}"></span>
-              <span>You (${this.escapeHtml(this.userCharacter.name)})</span>
+            <div class="character-pill user-pill" style="--char-color: ${this.userCharacter.color}">
+              <span class="pill-avatar" style="background: ${this.userCharacter.color}30; color: ${this.userCharacter.color}">
+                ${this.userCharacter.avatar ? `<img src="${this.userCharacter.avatar}" alt="">` : this.userCharacter.name.charAt(0).toUpperCase()}
+              </span>
+              <span class="pill-name">You</span>
             </div>
           ` : ''}
         </div>
@@ -134,7 +149,7 @@ export class ChatView {
           <button class="header-btn ${this.isAutoScenario ? 'active' : ''}" id="auto-scenario-btn" title="Auto Scenario">
             ${renderIcon(ICONS.autoPlay, 18, 18)}
           </button>
-          <button class="header-btn ${this.isSidePanelOpen ? 'active' : ''}" id="side-panel-btn" title="Side Panel">
+          <button class="header-btn ${this.isSidePanelOpen ? 'active' : ''}" id="side-panel-btn" title="Director's Console">
             ${renderIcon(ICONS.panelRight, 18, 18)}
           </button>
         </div>
@@ -153,8 +168,11 @@ export class ChatView {
             <circle cx="16" cy="10" r="2" fill="currentColor"/>
           </svg>
         </span>
-        <span>Auto Scenario Active — Characters speaking autonomously</span>
-        <button class="btn btn-sm btn-outline" id="pause-auto-btn">Pause</button>
+        <span class="banner-text">Auto Scenario Active — Characters speaking autonomously</span>
+        <button class="btn btn-sm btn-outline" id="pause-auto-btn">
+          ${renderIcon(ICONS.pause, 14, 14)}
+          <span>Pause</span>
+        </button>
       </div>
     `;
   }
@@ -164,7 +182,7 @@ export class ChatView {
       <div class="input-area">
         <div class="input-toolbar">
           <div class="toolbar-left">
-            <button class="toolbar-btn ${this.isRecording ? 'active' : ''}" id="mic-btn" title="Voice Input (Whisper)">
+            <button class="toolbar-btn" id="mic-btn" title="Voice Input (Whisper)">
               ${renderIcon(ICONS.mic, 14, 14)}
               <span>Mic</span>
             </button>
@@ -181,7 +199,7 @@ export class ChatView {
           <textarea 
             class="input-textarea" 
             id="message-input" 
-            placeholder="Enter the scene..."
+            placeholder="Enter the scene... describe your actions and dialogue..."
             rows="1"
           ></textarea>
           <button class="input-send-btn" id="send-btn" title="Send Message">
@@ -192,205 +210,8 @@ export class ChatView {
     `;
   }
 
-  private renderSidePanel(): string {
-    return `
-      <aside class="side-panel ${this.isSidePanelOpen ? 'open' : ''}">
-        <div class="panel-header">
-          <h2 class="panel-title">Director's Console</h2>
-          <button class="panel-close-btn" id="close-panel-btn">
-            ${renderIcon(ICONS.x, 18, 18)}
-          </button>
-        </div>
-        <div class="panel-tabs">
-          <button class="panel-tab ${this.activeTab === 'next' ? 'active' : ''}" data-tab="next">What Next</button>
-          <button class="panel-tab ${this.activeTab === 'details' ? 'active' : ''}" data-tab="details">Brief Details</button>
-          <button class="panel-tab ${this.activeTab === 'matrix' ? 'active' : ''}" data-tab="matrix">Matrix</button>
-          <button class="panel-tab ${this.activeTab === 'memory' ? 'active' : ''}" data-tab="memory">Memory</button>
-          <button class="panel-tab ${this.activeTab === 'debug' ? 'active' : ''}" data-tab="debug">Debug</button>
-          <button class="panel-tab ${this.activeTab === 'scene' ? 'active' : ''}" data-tab="scene">Scene</button>
-        </div>
-        <div class="panel-content" id="panel-content">
-          ${this.renderPanelContent()}
-        </div>
-      </aside>
-    `;
-  }
-
-  private renderPanelContent(): string {
-    switch (this.activeTab) {
-      case 'next':
-        return this.renderWhatNextTab();
-      case 'details':
-        return this.renderBriefDetailsTab();
-      case 'matrix':
-        return this.renderMatrixTab();
-      case 'memory':
-        return this.renderMemoryTab();
-      case 'debug':
-        return this.renderDebugTab();
-      case 'scene':
-        return this.renderSceneTab();
-      default:
-        return '';
-    }
-  }
-
-  private renderWhatNextTab(): string {
-    return `
-      <div class="panel-section">
-        <label class="form-label">What Should Happen Next</label>
-        <p class="panel-description">Direct the story arc. The controllers will weave this into the narrative.</p>
-        <textarea 
-          class="form-textarea" 
-          id="what-next-input"
-          rows="6"
-          placeholder="e.g., Character A discovers a secret about Character B. Tension rises. The user should feel conflicted..."
-        >${this.scenario.settings.whatNext || ''}</textarea>
-        <button class="btn btn-primary btn-sm" id="save-next-btn" style="margin-top: var(--space-sm);">
-          Update Direction
-        </button>
-      </div>
-    `;
-  }
-
-  private renderBriefDetailsTab(): string {
-    return `
-      <div class="panel-section">
-        <label class="form-label">Brief Details</label>
-        <p class="panel-description">Persistent style notes, reminders, and constraints for all controllers.</p>
-        <textarea 
-          class="form-textarea" 
-          id="brief-details-input"
-          rows="8"
-          placeholder="Writing style: cinematic, dialogue-heavy&#10;Emoji usage: minimal&#10;Avoid: explicit violence, modern slang&#10;Tone: melancholic, mysterious"
-        >${this.scenario.settings.briefDetails || ''}</textarea>
-        <button class="btn btn-primary btn-sm" id="save-details-btn" style="margin-top: var(--space-sm);">
-          Save Notes
-        </button>
-      </div>
-    `;
-  }
-
-  private renderMatrixTab(): string {
-    const chars = Array.from(this.characters.values());
-    if (chars.length === 0) return '<p class="panel-empty">No characters in this scenario.</p>';
-
-    let matrixHTML = '<div class="relationship-matrix">';
-    chars.forEach(fromChar => {
-      matrixHTML += `<div class="matrix-row">`;
-      matrixHTML += `<div class="matrix-header" style="color: ${fromChar.color}">${this.escapeHtml(fromChar.name)}</div>`;
-      chars.forEach(toChar => {
-        if (fromChar.id === toChar.id) {
-          matrixHTML += `<div class="matrix-cell matrix-self">—</div>`;
-        } else {
-          const relation = this.scenario.relationshipMatrix?.[fromChar.id]?.[toChar.id];
-          matrixHTML += `
-            <div class="matrix-cell ${relation ? 'matrix-has-data' : ''}" title="${relation ? relation.reason : 'Neutral'}">
-              <span class="matrix-mood" style="color: ${relation?.mood === 'hostile' ? 'var(--accent-rose)' : relation?.mood === 'friendly' ? 'var(--accent-emerald)' : 'var(--text-secondary)'}">
-                ${relation ? relation.mood.charAt(0).toUpperCase() : '○'}
-              </span>
-            </div>
-          `;
-        }
-      });
-      matrixHTML += `</div>`;
-    });
-    matrixHTML += '</div>';
-
-    return `
-      <div class="panel-section">
-        <label class="form-label">Relationship Matrix</label>
-        <p class="panel-description">How characters feel about each other. Updated by the Main Controller.</p>
-        ${matrixHTML}
-      </div>
-    `;
-  }
-
-  private renderMemoryTab(): string {
-    return `
-      <div class="panel-section">
-        <label class="form-label">Memory Summary</label>
-        <p class="panel-description">Long-term summary maintained by the Main Controller.</p>
-        <div class="memory-box">
-          ${this.scenario.summary ? `
-            <p>${this.escapeHtml(this.scenario.summary)}</p>
-          ` : `
-            <p class="panel-empty">No summary yet. The Main Controller will generate one after sufficient interaction.</p>
-          `}
-        </div>
-      </div>
-      <div class="panel-section">
-        <label class="form-label">Edit Summary</label>
-        <textarea 
-          class="form-textarea" 
-          id="summary-input"
-          rows="4"
-          placeholder="Manually edit the scenario summary..."
-        >${this.scenario.summary || ''}</textarea>
-        <button class="btn btn-outline btn-sm" id="save-summary-btn" style="margin-top: var(--space-sm);">
-          Update Summary
-        </button>
-      </div>
-    `;
-  }
-
-  private renderDebugTab(): string {
-    return `
-      <div class="panel-section">
-        <label class="form-label">Controller Stream</label>
-        <p class="panel-description">Live view of controller directives and decisions.</p>
-        <div class="debug-stream" id="debug-stream">
-          <div class="debug-entry">
-            <span class="debug-timestamp">System</span>
-            <span class="debug-message">Waiting for controller activity...</span>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  private renderSceneTab(): string {
-    const charList = Array.from(this.characters.values()).map(c => `
-      <div class="scene-character">
-        <div class="scene-avatar" style="${characterColorStyle(c)}">
-          ${c.avatar ? `<img src="${c.avatar}" alt="">` : c.name.charAt(0).toUpperCase()}
-        </div>
-        <div class="scene-info">
-          <span class="scene-name" style="color: ${c.color}">${this.escapeHtml(c.name)}</span>
-          <span class="scene-model">${c.modelId || 'Default model'}</span>
-        </div>
-      </div>
-    `).join('');
-
-    return `
-      <div class="panel-section">
-        <label class="form-label">Active Characters</label>
-        <div class="scene-characters-list">
-          ${charList}
-        </div>
-      </div>
-      <div class="panel-section">
-        <label class="form-label">Scenario Settings</label>
-        <div class="scene-settings">
-          <div class="scene-setting">
-            <span>AI Knows Real User</span>
-            <span class="scene-value">${this.scenario.settings.aiKnowsUser ? 'Yes' : 'No'}</span>
-          </div>
-          <div class="scene-setting">
-            <span>Controller Interval</span>
-            <span class="scene-value">Every ${this.scenario.settings.controllerInterval || 10} messages</span>
-          </div>
-          <div class="scene-setting">
-            <span>Auto Image Gen</span>
-            <span class="scene-value">${this.scenario.settings.autoImageGen ? 'Enabled' : 'Manual'}</span>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
   private async loadMessages() {
-    const messages = await messageStore.getByScenario(this.scenario.id);
+    const messages = await chatStore.getMessages(this.scenario.id);
     const messagesList = this.container.querySelector('#messages-list');
     if (messagesList) {
       messagesList.innerHTML = messages.map(m => this.renderMessage(m)).join('');
@@ -400,72 +221,142 @@ export class ChatView {
 
   private renderMessage(message: Message): string {
     const isUser = message.characterId === this.userCharacter?.id;
-    const character = isUser ? this.userCharacter : this.characters.get(message.characterId);
+    const character = isUser ? this.userCharacter : this.characters.get(message.characterId || '');
     if (!character) return '';
 
-    const wrapperClass = isUser ? 'user-message' : 'ai-message';
-    const actions = message.actions || [];
+    const isStreaming = message.id === this.streamingMessageId;
+    const hasImage = !!message.imageUrl;
+    const hasAudio = !!message.audioUrl;
+
+    // Parse content into actions and dialogue
+    const { actions, dialogue, fullContent } = this.parseContent(message.content);
 
     return `
-      <div class="message-wrapper ${wrapperClass}" data-message-id="${message.id}">
-        <div class="message-header">
-          <div class="message-avatar" style="border-color: ${character.color}; background: ${character.color}20">
-            ${character.avatar ? `<img src="${character.avatar}" alt="">` : character.name.charAt(0).toUpperCase()}
-          </div>
-          <span class="message-author" style="color: ${character.color}">${this.escapeHtml(character.name)}</span>
-          <span class="message-time">${this.formatTime(message.timestamp)}</span>
+      <div class="message-wrapper ${isUser ? 'user-message' : 'character-message'} ${isStreaming ? 'streaming' : ''}" 
+           data-message-id="${message.id}" 
+           style="--char-color: ${character.color}">
+        <div class="message-avatar" style="background: ${character.color}20; border-color: ${character.color}40">
+          ${character.avatar ? `<img src="${character.avatar}" alt="${character.name}">` : character.name.charAt(0).toUpperCase()}
         </div>
-        <div class="message-bubble" style="${isUser ? `border-color: ${character.color}40` : ''}">
-          <div class="message-content">
-            ${this.renderContent(message.content)}
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-author" style="color: ${character.color}">${this.escapeHtml(character.name)}</span>
+            <span class="message-time">${this.formatTime(message.timestamp)}</span>
+            ${isStreaming ? '<span class="streaming-badge">typing...</span>' : ''}
           </div>
           ${actions.length > 0 ? `
-            <div class="message-actions-inline">
-              ${actions.map(a => `
-                <span class="action-tag" title="${a.description}">${a.type}</span>
-              `).join('')}
+            <div class="message-actions-text">
+              ${actions.map(a => `<em class="action-line">${this.escapeHtml(a)}</em>`).join('')}
             </div>
           ` : ''}
-        </div>
-        <div class="message-actions">
-          <button class="message-action-btn" title="Generate Image" data-action="image" data-msg-id="${message.id}">
-            ${renderIcon(ICONS.image, 14, 14)}
-          </button>
-          <button class="message-action-btn" title="Generate Voice" data-action="voice" data-msg-id="${message.id}">
-            ${renderIcon(ICONS.volume, 14, 14)}
-          </button>
-          <button class="message-action-btn" title="Regenerate" data-action="regenerate" data-msg-id="${message.id}">
-            ${renderIcon(ICONS.refreshCw, 14, 14)}
-          </button>
-          <button class="message-action-btn" title="Branch from here" data-action="branch" data-msg-id="${message.id}">
-            ${renderIcon(ICONS.gitBranch, 14, 14)}
-          </button>
+          <div class="message-bubble">
+            ${dialogue ? `<p class="message-dialogue">"${this.escapeHtml(dialogue)}"</p>` : ''}
+            ${!dialogue && fullContent ? `<p class="message-text">${this.escapeHtml(fullContent)}</p>` : ''}
+            ${hasImage ? `<div class="message-image"><img src="${message.imageUrl}" alt="Generated image"></div>` : ''}
+          </div>
+          ${isStreaming ? `
+            <div class="streaming-cursor"></div>
+          ` : ''}
+          <div class="message-footer-actions">
+            ${renderIcon(ICONS.image, 14, 14, 'var(--text-muted)', 1.5)}
+            ${renderIcon(ICONS.volume, 14, 14, 'var(--text-muted)', 1.5)}
+            ${renderIcon(ICONS.refreshCw, 14, 14, 'var(--text-muted)', 1.5)}
+            ${renderIcon(ICONS.gitBranch, 14, 14, 'var(--text-muted)', 1.5)}
+          </div>
         </div>
       </div>
     `;
   }
 
-  private renderContent(content: string): string {
-    // Parse markdown and sanitize
-    const parsed = marked.parse(content, { async: false }) as string;
-    return DOMPurify.sanitize(parsed, { ALLOWED_TAGS: ['p', 'br', 'em', 'strong', 'span'] });
+  private parseContent(content: string): { actions: string[]; dialogue: string; fullContent: string } {
+    const actions: string[] = [];
+    let dialogue = '';
+    let fullContent = content;
+
+    // Extract actions between ** or *
+    const actionRegex = /\*\*([^*]+)\*\*|\*([^*]+)\*/g;
+    let match;
+    while ((match = actionRegex.exec(content)) !== null) {
+      actions.push(match[1] || match[2]);
+    }
+
+    // Extract dialogue between ""
+    const dialogueRegex = /"([^"]+)"/;
+    const dialogueMatch = content.match(dialogueRegex);
+    if (dialogueMatch) {
+      dialogue = dialogueMatch[1];
+    }
+
+    return { actions, dialogue, fullContent };
+  }
+
+  private showTypingIndicator(messageId: string, characterId: string) {
+    const character = this.characters.get(characterId);
+    if (!character) return;
+
+    const placeholder: Message = {
+      id: messageId,
+      scenarioId: this.scenario.id,
+      characterId,
+      content: '',
+      actions: [],
+      dialogue: '',
+      timestamp: Date.now()
+    };
+
+    const messagesList = this.container.querySelector('#messages-list');
+    if (messagesList) {
+      messagesList.insertAdjacentHTML('beforeend', this.renderMessage(placeholder));
+      this.scrollToBottom();
+    }
+  }
+
+  private updateStreamingMessage(messageId: string, chunk: string) {
+    const element = this.container.querySelector(`[data-message-id="${messageId}"]`);
+    if (element) {
+      const bubble = element.querySelector('.message-bubble');
+      if (bubble) {
+        const current = bubble.textContent || '';
+        bubble.textContent = current + chunk;
+      }
+    }
+  }
+
+  private finalizeStreamingMessage(messageId: string, content: string) {
+    const element = this.container.querySelector(`[data-message-id="${messageId}"]`);
+    if (element) {
+      element.classList.remove('streaming');
+      const { actions, dialogue, fullContent } = this.parseContent(content);
+      
+      // Re-render with proper formatting
+      element.outerHTML = this.renderMessage({
+        id: messageId,
+        scenarioId: this.scenario.id,
+        characterId: element.getAttribute('data-character-id') || '',
+        content,
+        actions,
+        dialogue,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  private handleStreamingError(messageId: string, error: Error) {
+    const element = this.container.querySelector(`[data-message-id="${messageId}"]`);
+    if (element) {
+      element.classList.add('error');
+      const bubble = element.querySelector('.message-bubble');
+      if (bubble) {
+        bubble.innerHTML = `<span class="error-text">Error: ${this.escapeHtml(error.message)}</span>`;
+      }
+    }
   }
 
   private appendMessage(message: Message) {
     const messagesList = this.container.querySelector('#messages-list');
     if (messagesList) {
-      const html = this.renderMessage(message);
-      messagesList.insertAdjacentHTML('beforeend', html);
-    }
-  }
-
-  private updateMessage(message: Message) {
-    const existing = this.container.querySelector(`[data-message-id="${message.id}"]`);
-    if (existing) {
-      const contentEl = existing.querySelector('.message-content');
-      if (contentEl) {
-        contentEl.innerHTML = this.renderContent(message.content);
-      }
+      messagesList.insertAdjacentHTML('beforeend', this.renderMessage(message));
+      this.scrollToBottom();
     }
   }
 
@@ -486,25 +377,9 @@ export class ChatView {
       this.toggleSidePanel();
     });
 
-    this.container.querySelector('#close-panel-btn')?.addEventListener('click', () => {
-      this.toggleSidePanel();
-    });
-
     // Auto scenario toggle
     this.container.querySelector('#auto-scenario-btn')?.addEventListener('click', () => {
       this.toggleAutoScenario();
-    });
-
-    this.container.querySelector('#pause-auto-btn')?.addEventListener('click', () => {
-      this.toggleAutoScenario();
-    });
-
-    // Tab switching
-    this.container.querySelectorAll('[data-tab]').forEach(tab => {
-      tab.addEventListener('click', (e) => {
-        this.activeTab = (e.currentTarget as HTMLElement).dataset.tab as any;
-        this.render();
-      });
     });
 
     // Send message
@@ -512,65 +387,41 @@ export class ChatView {
       this.sendMessage();
     });
 
+    // Textarea auto-resize
     const textarea = this.container.querySelector('#message-input') as HTMLTextAreaElement;
     if (textarea) {
       textarea.addEventListener('input', () => {
         textarea.style.height = 'auto';
         textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
       });
+      
       textarea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey && (e.metaKey || e.ctrlKey)) {
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
           e.preventDefault();
           this.sendMessage();
         }
       });
     }
-
-    // Message actions
-    this.container.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const el = e.currentTarget as HTMLElement;
-        const action = el.dataset.action;
-        const msgId = el.dataset.msgId;
-        if (action && msgId) {
-          this.handleMessageAction(action, msgId);
-        }
-      });
-    });
-
-    // Panel save buttons
-    this.container.querySelector('#save-next-btn')?.addEventListener('click', () => {
-      const input = this.container.querySelector('#what-next-input') as HTMLTextAreaElement;
-      if (input) {
-        scenarioStore.updateSettings(this.scenario.id, { whatNext: input.value });
-        this.showToast('Direction updated', 'success');
-      }
-    });
-
-    this.container.querySelector('#save-details-btn')?.addEventListener('click', () => {
-      const input = this.container.querySelector('#brief-details-input') as HTMLTextAreaElement;
-      if (input) {
-        scenarioStore.updateSettings(this.scenario.id, { briefDetails: input.value });
-        this.showToast('Notes saved', 'success');
-      }
-    });
   }
 
   private toggleSidePanel() {
     this.isSidePanelOpen = !this.isSidePanelOpen;
-    this.sidePanel?.classList.toggle('open', this.isSidePanelOpen);
+    this.sidePanel?.setOpen(this.isSidePanelOpen);
     this.container.querySelector('#side-panel-btn')?.classList.toggle('active', this.isSidePanelOpen);
   }
 
   private toggleAutoScenario() {
     this.isAutoScenario = !this.isAutoScenario;
-    this.render();
+    this.container.querySelector('#auto-scenario-btn')?.classList.toggle('active', this.isAutoScenario);
+    
     if (this.isAutoScenario) {
-      this.showToast('Auto Scenario started', 'info');
-      // TODO: Trigger controller loop
+      scenarioStore.startAutoScenario();
     } else {
-      this.showToast('Auto Scenario paused', 'info');
+      scenarioStore.pauseAutoScenario();
     }
+    
+    // Re-render to show/hide banner
+    this.render();
   }
 
   private async sendMessage() {
@@ -582,60 +433,20 @@ export class ChatView {
     textarea.style.height = 'auto';
 
     if (!this.userCharacter) {
-      this.showToast('Create your character first', 'error');
+      appEvents.emit('toast', { message: 'Create your character first', type: 'warning' });
       return;
     }
 
-    const message = await messageStore.add({
-      scenarioId: this.scenario.id,
-      characterId: this.userCharacter.id,
-      content,
-      actions: [],
-      metadata: {},
-      timestamp: Date.now()
-    });
-
-    // TODO: Trigger character response if not auto-mode
-    if (!this.isAutoScenario) {
-      // Request next character to respond
-    }
-  }
-
-  private handleMessageAction(action: string, messageId: string) {
-    switch (action) {
-      case 'image':
-        this.showToast('Generating image...', 'info');
-        break;
-      case 'voice':
-        this.showToast('Generating voice...', 'info');
-        break;
-      case 'regenerate':
-        this.showToast('Regenerating...', 'info');
-        break;
-      case 'branch':
-        this.branchScenario(messageId);
-        break;
-    }
-  }
-
-  private async branchScenario(messageId: string) {
-    const newScenario = await scenarioStore.branch(this.scenario.id, messageId);
-    if (newScenario) {
-      this.showToast(`Branched to "${newScenario.name}"`, 'success');
-    }
-  }
-
-  private showToast(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') {
-    appEvents.emit('toast', { message, type });
-  }
-
-  private formatTime(timestamp: number): string {
-    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    await chatStore.sendMessage(this.scenario.id, this.userCharacter.id, content);
   }
 
   private escapeHtml(text: string): string {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  private formatTime(timestamp: number): string {
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 }
