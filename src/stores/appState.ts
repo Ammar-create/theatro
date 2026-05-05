@@ -1,5 +1,5 @@
 // ===== APP STATE & EVENTS =====
-import { Character, Scenario } from '../types/index.js';
+import { Scenario } from '../types/index.js';
 
 export class EventEmitter {
   private listeners: Map<string, Set<Function>> = new Map();
