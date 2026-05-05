@@ -104,6 +104,11 @@ export async function saveScenario(scenario: Scenario): Promise<void> {
   await db.put('scenarios', scenario);
 }
 
+export async function deleteScenario(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('scenarios', id);
+}
+
 export async function getMessagesForScenario(scenarioId: string, limit = 100): Promise<Message[]> {
   const db = await getDB();
   const tx = db.transaction('messages', 'readonly');
@@ -162,7 +167,7 @@ export async function getSetting<T>(key: string, defaultValue?: T): Promise<T | 
   return value !== undefined ? value : defaultValue;
 }
 
-export async function setSetting(key: string, value: any): Promise<void> {
+export async function setSetting(key: string, value: unknown): Promise<void> {
   const db = await getDB();
   await db.put('settings', value, key);
 }
@@ -181,4 +186,103 @@ export async function initializeDefaults(): Promise<void> {
   if (!hasTheme) {
     await db.put('settings', 'dark', 'theme');
   }
+}
+
+// Export/Import functionality
+export async function exportAllData(): Promise<unknown> {
+  const db = await getDB();
+  
+  const [characters, scenarios, messages, memories, relationships, providers] = await Promise.all([
+    db.getAll('characters'),
+    db.getAll('scenarios'),
+    db.getAll('messages'),
+    db.getAll('memories'),
+    db.getAll('relationships'),
+    db.getAll('providers')
+  ]);
+
+  const settings: Record<string, unknown> = {};
+  const settingsKeys = await db.getAllKeys('settings');
+  for (const key of settingsKeys) {
+    settings[key as string] = await db.get('settings', key);
+  }
+
+  return {
+    version: '1.0',
+    exportedAt: Date.now(),
+    characters,
+    scenarios,
+    messages,
+    memories,
+    relationships,
+    providers,
+    settings
+  };
+}
+
+export async function importAllData(data: {
+  characters?: Character[];
+  scenarios?: Scenario[];
+  messages?: Message[];
+  memories?: Memory[];
+  relationships?: RelationshipMatrix[];
+  providers?: Provider[];
+  settings?: Record<string, unknown>;
+}): Promise<void> {
+  const db = await getDB();
+  
+  const tx = db.transaction([
+    'characters', 'scenarios', 'messages', 'memories', 
+    'relationships', 'providers', 'settings'
+  ], 'readwrite');
+
+  // Clear existing data
+  await Promise.all([
+    tx.objectStore('characters').clear(),
+    tx.objectStore('scenarios').clear(),
+    tx.objectStore('messages').clear(),
+    tx.objectStore('memories').clear(),
+    tx.objectStore('relationships').clear(),
+    tx.objectStore('providers').clear(),
+    tx.objectStore('settings').clear()
+  ]);
+
+  // Import new data
+  if (data.characters) {
+    for (const char of data.characters) {
+      await tx.objectStore('characters').put(char);
+    }
+  }
+  if (data.scenarios) {
+    for (const scen of data.scenarios) {
+      await tx.objectStore('scenarios').put(scen);
+    }
+  }
+  if (data.messages) {
+    for (const msg of data.messages) {
+      await tx.objectStore('messages').put(msg);
+    }
+  }
+  if (data.memories) {
+    for (const mem of data.memories) {
+      await tx.objectStore('memories').put(mem);
+    }
+  }
+  if (data.relationships) {
+    for (const rel of data.relationships) {
+      await tx.objectStore('relationships').put(rel);
+    }
+  }
+  if (data.providers) {
+    for (const prov of data.providers) {
+      await tx.objectStore('providers').put(prov);
+    }
+  }
+  if (data.settings) {
+    for (const [key, value] of Object.entries(data.settings)) {
+      await tx.objectStore('settings').put(value, key);
+    }
+  }
+
+  await tx.done;
 }
