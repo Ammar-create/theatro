@@ -4,6 +4,7 @@ import { appIcons } from '../assets/icons/index.js';
 import { cpu, fileJson, moon, sun } from '../assets/icons/part2.js';
 import { providerStore, settingsStore } from '../stores/index.js';
 import { exportAllData, importAllData } from '../core/exportImport.js';
+import { Provider } from '../types/index.js';
 
 export class SettingsView {
   private container: HTMLElement;
@@ -137,8 +138,7 @@ export class SettingsView {
   private renderProvidersTab(): string {
     const settings = settingsStore.getAll();
     const providers = providerStore.getAll();
-    const pollinationP = providers.find(p => p.type === 'pollinations');
-    const aquaP = providers.find(p => p.type === 'aqua');
+    const aquaP = providers.find((p: Provider) => p.type === 'aqua');
 
     return `
       <section class="settings-section">
