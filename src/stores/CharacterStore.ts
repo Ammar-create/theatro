@@ -1,7 +1,4 @@
-import { 
-  getDB, getAllCharacters, getCharacter, saveCharacter, 
-  deleteCharacter, getUserCharacter 
-} from '../core/storage.js';
+import { getAllCharacters, saveCharacter, deleteCharacter } from '../core/storage.js';
 import { Character } from '../types/index.js';
 import { appEvents } from './index.js';
 import { generateImage } from '../services/providers.js';
