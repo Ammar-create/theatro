@@ -11,7 +11,7 @@ export interface ControllerAdapter {
     scenario: Scenario,
     messages: Message[],
     relationships: RelationshipMatrix | undefined,
-    directive?: any
+    directive?: string
   ): AsyncGenerator<string>;
 }
 
@@ -24,7 +24,7 @@ class MainControllerAdapter implements ControllerAdapter {
     scenario: Scenario,
     messages: Message[],
     relationships: RelationshipMatrix | undefined,
-    directive?: any
+    directive?: string
   ): AsyncGenerator<string> {
     const provider = await getDefaultProvider();
     if (provider) {
@@ -39,7 +39,8 @@ class MainControllerAdapter implements ControllerAdapter {
       relationships
     });
 
-    yield* streamChat({
+    // streamChat returns Promise<AsyncGenerator> — await, then yield*
+    const generator = await streamChat({
       model: this.model,
       messages: [
         { role: 'system', content: await this.getSystemPrompt() },
@@ -48,6 +49,11 @@ class MainControllerAdapter implements ControllerAdapter {
       temperature: 0.3,
       stream: true
     }, this.providerId);
+
+    for await (const chunk of generator) {
+      yield chunk.content;
+      if (chunk.done) break;
+    }
   }
 
   private async getSystemPrompt(): Promise<string> {
@@ -96,7 +102,7 @@ class ScenarioControllerAdapter implements ControllerAdapter {
     scenario: Scenario,
     messages: Message[],
     relationships: RelationshipMatrix | undefined,
-    directive?: any
+    directive?: string
   ): AsyncGenerator<string> {
     const provider = await getDefaultProvider();
     if (provider) {
@@ -108,11 +114,11 @@ class ScenarioControllerAdapter implements ControllerAdapter {
       messages,
       characters: [],
       relationships,
-      userDirective: directive?.whatHappensNext,
-      briefDetails: directive?.briefDetails
+      userDirective: directive,
+      briefDetails: ''
     });
 
-    yield* streamChat({
+    const generator = await streamChat({
       model: this.model,
       messages: [
         { role: 'system', content: await this.getSystemPrompt() },
@@ -121,6 +127,11 @@ class ScenarioControllerAdapter implements ControllerAdapter {
       temperature: 0.7,
       stream: true
     }, this.providerId);
+
+    for await (const chunk of generator) {
+      yield chunk.content;
+      if (chunk.done) break;
+    }
   }
 
   private async getSystemPrompt(): Promise<string> {
@@ -164,19 +175,19 @@ class CreativeControllerAdapter implements ControllerAdapter {
   private providerId = 'pollinations-p';
 
   async *run(
-    scenario: Scenario,
-    messages: Message[],
-    relationships: RelationshipMatrix | undefined,
-    directive?: any
+    _scenario: Scenario,
+    _messages: Message[],
+    _relationships: RelationshipMatrix | undefined,
+    directive?: string
   ): AsyncGenerator<string> {
     const provider = await getDefaultProvider();
     if (provider) {
       this.providerId = provider.id;
     }
 
-    const prompt = directive?.brief || directive?.characterTemplate?.brief || '';
+    const prompt = directive || '';
 
-    yield* streamChat({
+    const generator = await streamChat({
       model: this.model,
       messages: [
         { role: 'system', content: await this.getSystemPrompt() },
@@ -185,6 +196,11 @@ class CreativeControllerAdapter implements ControllerAdapter {
       temperature: 0.9,
       stream: true
     }, this.providerId);
+
+    for await (const chunk of generator) {
+      yield chunk.content;
+      if (chunk.done) break;
+    }
   }
 
   private async getSystemPrompt(): Promise<string> {
@@ -222,15 +238,15 @@ class MediaControllerAdapter implements ControllerAdapter {
   type: ControllerType = 'media';
 
   async *run(
-    scenario: Scenario,
-    messages: Message[],
-    relationships: RelationshipMatrix | undefined,
-    directive?: any
+    _scenario: Scenario,
+    _messages: Message[],
+    _relationships: RelationshipMatrix | undefined,
+    directive?: string
   ): AsyncGenerator<string> {
     yield JSON.stringify({
       type: 'media_trigger',
-      mediaType: directive?.mediaType || 'image',
-      context: directive?.context || ''
+      mediaType: 'image',
+      context: directive || ''
     });
   }
 }
