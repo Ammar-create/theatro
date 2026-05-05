@@ -3,6 +3,7 @@ import { SidePanel } from './SidePanel.js';
 import { Modal } from './Modal.js';
 import { appIcons } from '../assets/icons/index.js';
 import { generateImage } from '../services/providers.js';
+import { Message } from '../types/index.js';
 
 export class ChatView {
   private container: HTMLElement;
@@ -65,10 +66,10 @@ export class ChatView {
   private async loadMessages(): Promise<void> {
     await chatStore.loadMessages(this.scenario.id);
     var messages = chatStore.getMessages();
-    messages.forEach(function(msg: any) { this.renderMessage(msg); }.bind(this));
+    messages.forEach(function(msg: Message) { this.renderMessage(msg); }.bind(this));
   }
 
-  private renderMessage(msg: any, streaming?: boolean): void {
+  private renderMessage(msg: Message, streaming?: boolean): void {
     if (!this.messageContainer) return;
     var s = streaming || false;
 
@@ -144,10 +145,10 @@ export class ChatView {
       chatStore.toggleAutoScenario();
     });
 
-    appEvents.on('chat:message-added', function(msg: any) { self.renderMessage(msg); });
+    appEvents.on('chat:message-added', function(msg: Message) { self.renderMessage(msg); });
     appEvents.on('streaming:start', function(data: { messageId: string; characterId: string }) {
       self.streamingMessageId = data.messageId;
-      self.renderMessage({ id: data.messageId, characterId: data.characterId, content: '', actions: [], dialogue: '', timestamp: Date.now() }, true);
+      self.renderMessage({ id: data.messageId, characterId: data.characterId, content: '', actions: [], dialogue: '', timestamp: Date.now() } as Message, true);
     });
     appEvents.on('streaming:chunk', function(data: { messageId: string; chunk: string }) {
       if (data.messageId !== self.streamingMessageId) return;
@@ -189,7 +190,7 @@ export class ChatView {
     await chatStore.sendUserMessage(content.trim(), dialogue, actions);
   }
 
-  private async handleMessageAction(action: string, msg: any): Promise<void> {
+  private async handleMessageAction(action: string, msg: Message): Promise<void> {
     switch (action) {
       case 'image':
         try {
