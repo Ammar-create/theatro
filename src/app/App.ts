@@ -1,13 +1,15 @@
 import { initializeStores, appEvents } from '../stores/index.js';
 import { Dashboard } from './Dashboard.js';
 import { ChatView } from './ChatView.js';
+import { SettingsView } from './SettingsView.js';
 import type { Scenario } from '../types/index.js';
 
 export class App {
   private container: HTMLElement;
   private dashboard: Dashboard | null = null;
   private chatView: ChatView | null = null;
-  private currentView: 'dashboard' | 'chat' = 'dashboard';
+  private settingsView: SettingsView | null = null;
+  private currentView: 'dashboard' | 'chat' | 'settings' = 'dashboard';
   private toastContainer: HTMLElement | null = null;
 
   constructor() {
@@ -24,17 +26,10 @@ export class App {
   }
 
   async init(): Promise<void> {
-    // Initialize all stores and load data
     await initializeStores();
-    
-    // Inject styles
     this.injectStyles();
-    
-    // Render initial view
-    this.renderDashboard();
-    
-    // Setup global event listeners
     this.setupGlobalListeners();
+    this.renderDashboard();
   }
 
   private injectStyles(): void {
@@ -45,25 +40,33 @@ export class App {
   }
 
   private setupGlobalListeners(): void {
-    // Listen for navigation to chat
     appEvents.on('navigate:chat', (scenario: Scenario) => {
       this.renderChat(scenario);
     });
 
-    // Listen for back to dashboard
     appEvents.on('navigate:dashboard', () => {
       this.renderDashboard();
     });
 
-    // Toast events
+    appEvents.on('navigate:settings', () => {
+      this.renderSettings();
+    });
+
+    appEvents.on('view:changed', ({ view }: { view: 'dashboard' | 'chat' | 'settings', scenario?: Scenario }) => {
+      if (view === 'settings') this.renderSettings();
+      if (view === 'dashboard') this.renderDashboard();
+      if (view === 'chat' && view.scenario) this.renderChat(view.scenario);
+    });
+
     appEvents.on('toast', ({ message, type }: { message: string; type: string }) => {
       this.showToast(message, type as any);
     });
 
-    // Escape key handling
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.currentView === 'chat') {
-        this.renderDashboard();
+      if (e.key === 'Escape') {
+        if (this.currentView === 'chat' || this.currentView === 'settings') {
+          this.renderDashboard();
+        }
       }
     });
   }
@@ -78,43 +81,40 @@ export class App {
 
     setTimeout(() => {
       toast.style.opacity = '0';
-      toast.style.transform = 'translateX(20px)';
       setTimeout(() => toast.remove(), 300);
     }, 3000);
   }
 
   private renderDashboard(): void {
+    this.cleanupViews();
     this.currentView = 'dashboard';
     this.container.innerHTML = '';
     this.container.className = 'theatro-layout dashboard-view';
-    
-    // Clean up previous views
-    if (this.dashboard) {
-      this.dashboard.destroy();
-      this.dashboard = null;
-    }
-    if (this.chatView) {
-      this.chatView.destroy();
-      this.chatView = null;
-    }
-    
     this.dashboard = new Dashboard(this.container);
   }
 
   private renderChat(scenario: Scenario): void {
+    this.cleanupViews();
     this.currentView = 'chat';
     this.container.innerHTML = '';
     this.container.className = 'theatro-layout chat-view';
-
-    // Clean up previous views
-    if (this.dashboard) {
-      this.dashboard.destroy();
-      this.dashboard = null;
-    }
-    if (this.chatView) {
-      this.chatView.destroy();
-    }
-
     this.chatView = new ChatView(this.container, scenario);
+  }
+
+  private renderSettings(): void {
+    this.cleanupViews();
+    this.currentView = 'settings';
+    this.container.innerHTML = '';
+    this.container.className = 'theatro-layout settings-view';
+    this.settingsView = new SettingsView(this.container);
+  }
+
+  private cleanupViews(): void {
+    this.dashboard?.destroy();
+    this.chatView?.destroy();
+    this.settingsView?.destroy();
+    this.dashboard = null;
+    this.chatView = null;
+    this.settingsView = null;
   }
 }
