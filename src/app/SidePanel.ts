@@ -1,4 +1,4 @@
-import { scenarioStore, characterStore, appState, appEvents } from '../stores/index.js';
+import { characterStore, appState, appEvents } from '../stores/index.js';
 import { appIcons } from '../assets/icons/index.js';
 
 export class SidePanel {
@@ -12,7 +12,7 @@ export class SidePanel {
     this.render();
     this.setupListeners();
 
-    appEvents.on('sidepanel:changed', ({ isOpen }) => {
+    appEvents.on('sidepanel:changed', ({ isOpen }: { isOpen: boolean }) => {
       this.isOpen = isOpen;
       this.updateVisibility();
     });
