@@ -4,6 +4,11 @@ import { ChatView } from './ChatView.js';
 import { SettingsView } from './SettingsView.js';
 import type { Scenario } from '../types/index.js';
 
+interface ViewChangedEvent {
+  view: 'dashboard' | 'chat' | 'settings';
+  scenario?: Scenario;
+}
+
 export class App {
   private container: HTMLElement;
   private dashboard: Dashboard | null = null;
@@ -52,14 +57,14 @@ export class App {
       this.renderSettings();
     });
 
-    appEvents.on('view:changed', ({ view }: { view: 'dashboard' | 'chat' | 'settings', scenario?: Scenario }) => {
+    appEvents.on('view:changed', ({ view, scenario }: ViewChangedEvent) => {
       if (view === 'settings') this.renderSettings();
       if (view === 'dashboard') this.renderDashboard();
-      if (view === 'chat' && view.scenario) this.renderChat(view.scenario);
+      if (view === 'chat' && scenario) this.renderChat(scenario);
     });
 
     appEvents.on('toast', ({ message, type }: { message: string; type: string }) => {
-      this.showToast(message, type as any);
+      this.showToast(message, type as 'success' | 'error' | 'info' | 'warning');
     });
 
     document.addEventListener('keydown', (e) => {
