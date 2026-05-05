@@ -40,6 +40,10 @@ export interface ScenarioSettings {
   controllerCheckFrequency: number;
   shortTermMemorySize: number;
   privateChannels: PrivateChannel[];
+  /** Director instruction: what should happen next in the story */
+  whatNext: string;
+  /** Persistent style notes and character behavior guidelines */
+  briefDetails: string;
 }
 
 export interface PrivateChannel {
