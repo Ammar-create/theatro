@@ -1,7 +1,7 @@
 import { appEvents, appState, scenarioStore, characterStore } from '../stores/index.js';
 import { Modal } from './Modal.js';
 import { appIcons } from '../assets/icons/index.js';
-import { exportAllData, downloadJSON } from '../core/exportImport.js';
+import { Scenario } from '../types/index.js';
 
 export class Dashboard {
   private container: HTMLElement;
@@ -49,7 +49,7 @@ export class Dashboard {
                   <p>No scenarios yet</p>
                   <span>Create your first story world</span>
                 </div>
-              ` : scenarios.map(s => `
+              ` : scenarios.map((s: Scenario) => `
                 <div class="scenario-card" data-scenario-id="${s.id}">
                   <div class="scenario-info">
                     <h3>${s.name}</h3>
@@ -137,7 +137,6 @@ export class Dashboard {
 
   private showNewScenarioModal(characters: any[]): void {
     const userChar = characters.find(c => c.isUser);
-    const otherChars = characters.filter(c => !c.isUser);
 
     this.modal.show({
       title: 'Create New Scenario',
@@ -191,7 +190,7 @@ export class Dashboard {
           return false;
         }
 
-        const scenario = await scenarioStore.create({
+        await scenarioStore.create({
           name,
           lore,
           characterIds: charIds,
