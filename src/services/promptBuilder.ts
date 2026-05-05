@@ -179,7 +179,7 @@ function buildCreativeControllerPrompt(ctx: any): string {
     `Generate complete character sheets from brief descriptions.`,
     `\nOutput STRICT JSON with character object and image prompt.`,
     `\n=== BRIEF DESCRIPTION ===`,
-    ctx.characterTemplate?.brief || ctx.briefDetails || '',,
+    ctx.characterTemplate?.brief || ctx.briefDetails || '',
     `\nGuidelines:`,
     `- Names memorable and unique.`,
     `- Colors are emotional signatures.`,
