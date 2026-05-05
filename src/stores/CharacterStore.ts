@@ -1,49 +1,133 @@
-import { getAllCharacters, saveCharacter, deleteCharacter, getUserCharacter } from '../core/storage.js';
-import type { Character } from '../types/index.js';
+import { 
+  getDB, getAllCharacters, getCharacter, saveCharacter, 
+  deleteCharacter, getUserCharacter 
+} from '../core/storage.js';
+import { Character } from '../types/index.js';
+import { appEvents } from './index.js';
+import { generateImage } from './providers.js';
 
-export class CharacterStore {
-  async getAll(): Promise<Character[]> {
-    return getAllCharacters();
-  }
+class CharacterStore {
+  private characters: Map<string, Character> = new Map();
+  private isLoaded = false;
 
-  async getById(id: string): Promise<Character | undefined> {
+  async load(): Promise<void> {
+    if (this.isLoaded) return;
     const chars = await getAllCharacters();
-    return chars.find(c => c.id === id);
+    chars.forEach(c => this.characters.set(c.id, c));
+    this.isLoaded = true;
+    appEvents.emit('characters:loaded', this.getAll());
   }
 
-  async getUser(): Promise<Character | undefined> {
-    return getUserCharacter();
+  getAll(): Character[] {
+    return Array.from(this.characters.values());
   }
 
-  async create(data: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>): Promise<Character> {
+  get(id: string): Character | undefined {
+    return this.characters.get(id);
+  }
+
+  async create(data: Partial<Character>): Promise<Character> {
     const character: Character = {
-      ...data,
-      id: crypto.randomUUID(),
+      id: `char_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      name: data.name || 'Unnamed',
+      color: data.color || '#8b5cf6',
+      personality: data.personality || '',
+      appearance: data.appearance || '',
+      voice: data.voice || '',
+      voiceDescription: data.voiceDescription || '',
+      modelId: data.modelId || 'llama-scout',
+      providerId: data.providerId || 'pollinations-p',
+      avatar: data.avatar || '',
+      avatarType: data.avatarType || 'url',
+      isUser: data.isUser || false,
+      speechPatterns: data.speechPatterns || [],
+      defaultMood: data.defaultMood || 'neutral',
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
+
     await saveCharacter(character);
+    this.characters.set(character.id, character);
+    appEvents.emit('character:created', character);
     return character;
   }
 
-  async update(id: string, updates: Partial<Character>): Promise<void> {
-    const char = await this.getById(id);
-    if (!char) throw new Error('Character not found');
-    
-    const updated = { ...char, ...updates, updatedAt: Date.now() };
+  async update(id: string, data: Partial<Character>): Promise<Character | undefined> {
+    const existing = this.characters.get(id);
+    if (!existing) return undefined;
+
+    const updated: Character = {
+      ...existing,
+      ...data,
+      id: existing.id,
+      updatedAt: Date.now()
+    };
+
     await saveCharacter(updated);
+    this.characters.set(id, updated);
+    appEvents.emit('character:updated', updated);
+    return updated;
   }
 
   async delete(id: string): Promise<void> {
     await deleteCharacter(id);
+    this.characters.delete(id);
+    appEvents.emit('character:deleted', id);
   }
 
-  generateInitials(name: string): string {
-    return name.charAt(0).toUpperCase();
+  async setAsUser(id: string): Promise<void> {
+    // Unset any existing user character
+    for (const [charId, char] of this.characters) {
+      if (char.isUser) {
+        const updated = { ...char, isUser: false };
+        await saveCharacter(updated);
+        this.characters.set(charId, updated);
+      }
+    }
+
+    // Set new user character
+    const char = this.characters.get(id);
+    if (char) {
+      const updated = { ...char, isUser: true };
+      await saveCharacter(updated);
+      this.characters.set(id, updated);
+      appEvents.emit('user-character:changed', updated);
+    }
   }
 
-  generateAvatarColor(): string {
-    const colors = ['#8b5cf6', '#f59e0b', '#10b981', '#f43f5e', '#06b6d4', '#ec4899'];
-    return colors[Math.floor(Math.random() * colors.length)];
+  async getUserCharacter(): Promise<Character | undefined> {
+    for (const char of this.characters.values()) {
+      if (char.isUser) return char;
+    }
+    return undefined;
+  }
+
+  async generateAvatar(characterId: string, prompt: string): Promise<string | undefined> {
+    try {
+      const imageUrl = await generateImage(prompt);
+      await this.update(characterId, { 
+        avatar: imageUrl, 
+        avatarType: 'ai-generated' 
+      });
+      return imageUrl;
+    } catch (error) {
+      console.error('Avatar generation failed:', error);
+      return undefined;
+    }
+  }
+
+  async importCharacters(characters: Character[]): Promise<void> {
+    for (const char of characters) {
+      await saveCharacter(char);
+      this.characters.set(char.id, char);
+    }
+    appEvents.emit('characters:loaded', this.getAll());
+  }
+
+  clearCache(): void {
+    this.characters.clear();
+    this.isLoaded = false;
   }
 }
+
+export const characterStore = new CharacterStore();
