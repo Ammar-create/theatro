@@ -1,14 +1,14 @@
 // ===== TURN QUEUE MANAGER =====
 import { 
   TurnQueueItem, Message, Character, Scenario, 
-  RelationshipMatrix, Memory 
+  RelationshipMatrix 
 } from '../types/index.js';
 import { 
   saveMessage, getMessagesForScenario, 
   getMemory, saveMemory, getRelationshipMatrix, 
-  saveRelationshipMatrix, getCharacter 
+  saveRelationshipMatrix 
 } from '../core/storage.js';
-import { streamChat, generateImage, generateVoice } from './providers.js';
+import { streamChat, generateImage } from './providers.js';
 import { buildCharacterPrompt } from './promptBuilder.js';
 import { createControllerAdapter } from './controllers.js';
 import { appEvents } from '../stores/index.js';
@@ -124,7 +124,8 @@ export class TurnQueueManager {
     const memory = await getMemory(character.id, this.scenario.id);
     const relationshipMatrix = await getRelationshipMatrix(this.scenario.id);
     
-    const messages = recentMessages.map(m => ({
+    // Build API-compatible messages separately from the prompt messages
+    const apiMessages: { role: 'assistant'; content: string }[] = recentMessages.map(m => ({
       role: 'assistant' as const,
       content: this.formatMessageForPrompt(m)
     }));
@@ -134,7 +135,7 @@ export class TurnQueueManager {
       this.scenario,
       memory,
       relationshipMatrix,
-      messages,
+      recentMessages,
       item.directive
     );
     
@@ -143,12 +144,15 @@ export class TurnQueueManager {
     
     let fullContent = '';
     try {
-      for await (const chunk of streamChat({
+      // streamChat returns Promise<AsyncGenerator> — await it first
+      const generator = await streamChat({
         model: character.modelId,
-        messages: [{ role: 'system', content: prompt }, ...messages],
+        messages: [{ role: 'system', content: prompt }, ...apiMessages],
         temperature: 0.8,
         stream: true
-      }, character.providerId)) {
+      }, character.providerId);
+
+      for await (const chunk of generator) {
         if (chunk.content) {
           fullContent += chunk.content;
           appEvents.emit('streaming:chunk', { 
