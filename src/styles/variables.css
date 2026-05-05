@@ -1,0 +1,31 @@
+:root {
+  /* Theater Stage Colors */
+  --theater-black: #050508;
+  --theater-dark: #0a0a0f;
+  --theater-stage: #12121a;
+  --theater-curtain: #1a1a24;
+  --theater-velvet: #252532;
+  --theater-spot: #2d2d3d;
+  
+  /* Stage Lighting */
+  --spotlight-warm: #f59e0b;
+  --spotlight-cool: #8b5cf6;
+  --spotlight-rose: #f43f5e;
+  --spotlight-cyan: #06b6d4;
+  --spotlight-emerald: #10b981;
+  
+  /* Glow Effects */
+  --glow-warm: rgba(245, 158, 11, 0.3);
+  --glow-cool: rgba(139, 92, 246, 0.3);
+  --glow-rose: rgba(244, 63, 94, 0.3);
+  
+  /* Text */
+  --text-bright: #fafafa;
+  --text-dim: #a1a1aa;
+  --text-faint: #71717a;
+  --text-shadow: #52525b;
+  
+  /* Typography */
+  --font-theater: 'Playfair Display', Georgia, serif;
+  --font-system: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+}
