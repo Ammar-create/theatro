@@ -148,7 +148,7 @@ export class ChatView {
     appEvents.on('chat:message-added', function(msg: Message) { self.renderMessage(msg); });
     appEvents.on('streaming:start', function(data: { messageId: string; characterId: string }) {
       self.streamingMessageId = data.messageId;
-      self.renderMessage({ id: data.messageId, characterId: data.characterId, content: '', actions: [], dialogue: '', timestamp: Date.now() } as Message, true);
+      self.renderMessage({ id: data.messageId, scenarioId: self.scenario.id, characterId: data.characterId, content: '', actions: [], dialogue: '', timestamp: Date.now() } as Message, true);
     });
     appEvents.on('streaming:chunk', function(data: { messageId: string; chunk: string }) {
       if (data.messageId !== self.streamingMessageId) return;
