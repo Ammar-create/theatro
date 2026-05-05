@@ -16,14 +16,14 @@ interface TheatroDB extends DBSchema {
 }
 
 const DB_NAME = 'theatro-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<TheatroDB>> | null = null;
 
 export function getDB(): Promise<IDBPDatabase<TheatroDB>> {
   if (!dbPromise) {
     dbPromise = openDB<TheatroDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion) {
         if (!db.objectStoreNames.contains('characters')) {
           const charStore = db.createObjectStore('characters', { keyPath: 'id' });
           charStore.createIndex('by-updated', 'updatedAt');
@@ -52,8 +52,14 @@ export function getDB(): Promise<IDBPDatabase<TheatroDB>> {
           const provStore = db.createObjectStore('providers', { keyPath: 'id' });
           provStore.createIndex('by-default', 'isDefault');
         }
+
+        // Fix settings store: v1 used { keyPath: 'key' } (in-line keys)
+        // but code passes a separate key arg to put(). Recreate without keyPath.
+        if (oldVersion >= 1 && db.objectStoreNames.contains('settings')) {
+          db.deleteObjectStore('settings');
+        }
         if (!db.objectStoreNames.contains('settings')) {
-          db.createObjectStore('settings', { keyPath: 'key' });
+          db.createObjectStore('settings');
         }
       }
     });
