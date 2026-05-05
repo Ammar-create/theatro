@@ -42,30 +42,51 @@ export class Modal {
     document.body.appendChild(this.overlay);
     document.body.style.overflow = 'hidden';
 
-    // Close handlers
+    // Get elements
+    const container = this.overlay.querySelector('.modal-container') as HTMLElement;
     const closeBtn = this.overlay.querySelector('.btn-close-modal');
     const cancelBtn = this.overlay.querySelector('.btn-cancel');
     const confirmBtn = this.overlay.querySelector('.btn-confirm');
 
-    closeBtn?.addEventListener('click', () => this.close());
-    cancelBtn?.addEventListener('click', () => {
+    // Close handlers
+    closeBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.close();
+    });
+
+    cancelBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
       options.onCancel?.();
       this.close();
     });
-    
-    confirmBtn?.addEventListener('click', async () => {
+
+    confirmBtn?.addEventListener('click', async (e) => {
+      e.stopPropagation();
       const result = await options.onConfirm?.();
       if (result !== false) this.close();
     });
 
-    // Click outside to close
+    // Click outside to close - click on overlay (not container) closes
     this.overlay.addEventListener('click', (e) => {
-      if (e.target === this.overlay) this.close();
+      if (e.target === this.overlay) {
+        this.close();
+      }
     });
 
-    // Focus trap
-    const firstInput = this.overlay.querySelector('input, textarea');
-    if (firstInput) (firstInput as HTMLElement).focus();
+    // Escape key to close
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && this.active) {
+        this.close();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    // Focus first input
+    setTimeout(() => {
+      const firstInput = this.overlay?.querySelector('input[type="text"], textarea') as HTMLElement;
+      if (firstInput) firstInput.focus();
+    }, 50);
   }
 
   close(): void {
