@@ -2,7 +2,6 @@ import { Message, Character, Scenario } from '../types/index.js';
 import { scenarioStore } from './ScenarioStore.js';
 import { appEvents } from './appState.js';
 import { TurnQueueManager } from '../services/turnQueue.js';
-import { getMessagesForScenario, saveMessage } from '../core/storage.js';
 
 class ChatStore {
   private messages: Message[] = [];
