@@ -165,11 +165,24 @@ class OpenAICompatibleAdapter implements ProviderAdapter {
   private inferContextWindow(modelId: string): number {
     if (modelId.includes('grok')) return 200000;
     if (modelId.includes('llama-4')) return 256000;
-    if (modelId.includes('lincludes('mistral')) return 32000;
+    if (modelId.includes('llama')) return 128000;
+    if (modelId.includes('mistral')) return 32000;
     return 4096;
   }
 
-  private inferCapabilities(modelId: string): ('chat' | 'image' | 'voice' | 'vigetProvider(id: string): Promise<Provider | undefined> {
+  private inferCapabilities(modelId: string): ('chat' | 'image' | 'voice' | 'vision')[] {
+    if (modelId.includes('zimage')) return ['image'];
+    if (modelId.includes('tts') || modelId.includes('whisper')) return ['voice'];
+    if (modelId.includes('vision')) return ['chat', 'vision'];
+    return ['chat'];
+  }
+}
+
+export function createProviderAdapter(provider: Provider): ProviderAdapter {
+  return new OpenAICompatibleAdapter(provider);
+}
+
+export async function getProvider(id: string): Promise<Provider | undefined> {
   const db = await getDB();
   return db.get('providers', id);
 }
@@ -179,23 +192,50 @@ export async function getAllProviders(): Promise<Provider[]> {
   return db.getAll('providers');
 }
 
+export async function getDefaultProvider(): Promise<Provider | undefined> {
+  const providers = await getAllProviders();
+  const premiumProvider = providers.find(p => p.apiKey && p.apiKey.length > 0 && !p.isDefault);
+  if (premiumProvider) return premiumProvider;
+  return providers.find(p => p.isDefault) || providers[0];
+}
+
 export async function streamChat(params: ChatParams, providerId: string): Promise<AsyncGenerator<StreamingChunk>> {
   const provider = await getProvider(providerId);
-  if (!provider) throw new Error(`Provider not found: const adapter = cre async function generateImage(prompt: string, providerId: string = 'pollinations-p'): Promise<string> {
+  if (!provider) throw new Error(`Provider not found: ${providerId}`);
+  const adapter = createProviderAdapter(provider);
+  return adapter.streamChat(params);
+}
+
+export async function generateImage(prompt: string, providerId: string = 'pollinations-p'): Promise<string> {
   const provider = await getProvider(providerId);
   if (!provider) throw new Error(`Provider not found: ${providerId}`);
   const adapter = createProviderAdapter(provider);
   if (!adapter.generateImage) throw new Error('Image generation not supported');
-  return adapter.generateImage(prompt)tProvider(providerId throw new Error(`PrproviderId}`);
-  const adapter = createon initializeProviders(): Promise<void> t getDB();
+  return adapter.generateImage(prompt);
+}
+
+export async function generateVoice(text: string, voice?: string, providerId: string = 'pollinations-p'): Promise<string> {
+  const provider = await getProvider(providerId);
+  if (!provider) throw new Error(`Provider not found: ${providerId}`);
+  const adapter = createProviderAdapter(provider);
+  if (!adapter.generateVoice) throw new Error('Voice generation not supported');
+  return adapter.generateVoice(text, voice);
+}
+
+export async function initializeProviders(): Promise<void> {
+  const db = await getDB();
   const existing = await db.getAll('providers');
   if (existing.length > 0) return;
 
   const pollinations: Provider = {
     id: 'pollinations-p',
-    name: 'Pollinl: POLLINATIONS_BASEOLLINATIONS_PUBLISHABLE_KEY,
-    isDefa};
-  await db.put('ions);
+    name: 'Pollinations',
+    baseUrl: POLLINATIONS_BASE_URL,
+    apiKey: POLLINATIONS_PUBLISHABLE_KEY,
+    isDefault: true,
+    type: 'pollinations'
+  };
+  await db.put('providers', pollinations);
 
   const aqua: Provider = {
     id: 'aqua-a',
@@ -206,11 +246,6 @@ export async function streamChat(params: ChatParams, providerId: string): Promis
     type: 'aqua'
   };
   await db.put('providers', aqua);
-}
-
-export async function getDefaultProvider(): Promise<Provider | undefined> {
-  const providers = await getAllProviders();
-  return providers.find(p => p.isDefault) || providers[0];
 }
 
 export class RateLimitTracker {
