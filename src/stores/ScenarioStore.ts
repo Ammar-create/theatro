@@ -1,7 +1,6 @@
 // ===== SCENARIO STORE - Enhanced with missing methods =====
 import {
   getAllScenarios,
-  getScenario,
   saveScenario,
   deleteScenario,
   getMessagesForScenario,
@@ -219,17 +218,13 @@ class ScenarioStore {
     if (!scenario) return null;
 
     const messages = await getMessagesForScenario(id, 10000);
-    const characters = scenario.characterIds
-      .map(cid => characterStore.get(cid))
-      .filter((c): c is Character => c !== undefined);
 
     return {
       version: '1.0',
       exportedAt: Date.now(),
       type: 'scenario-export',
       scenario,
-      messages,
-      characters
+      messages
     };
   }
 
