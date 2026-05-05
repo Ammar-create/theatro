@@ -1,7 +1,7 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import {
   Character, Scenario, Message, Memory, RelationshipMatrix,
-  Provider
+  Provider, ExportData
 } from '../types/index.js';
 import { initializeProviders } from '../services/providers.js';
 
@@ -104,6 +104,39 @@ export async function saveScenario(scenario: Scenario): Promise<void> {
   await db.put('scenarios', scenario);
 }
 
+/**
+ * Delete a scenario and all its associated messages, memories, and relationships.
+ */
+export async function deleteScenario(id: string): Promise<void> {
+  const db = await getDB();
+  
+  // Delete all messages for this scenario
+  const messageTx = db.transaction('messages', 'readwrite');
+  const messageIndex = messageTx.store.index('by-scenario');
+  let cursor = await messageIndex.openCursor(IDBKeyRange.only(id));
+  while (cursor) {
+    await cursor.delete();
+    cursor = await cursor.continue();
+  }
+  await messageTx.done;
+  
+  // Delete all memories for this scenario
+  const memoryTx = db.transaction('memories', 'readwrite');
+  const memoryIndex = memoryTx.store.index('by-scenario');
+  let memCursor = await memoryIndex.openCursor(IDBKeyRange.only(id));
+  while (memCursor) {
+    await memCursor.delete();
+    memCursor = await memCursor.continue();
+  }
+  await memoryTx.done;
+  
+  // Delete relationship matrix for this scenario
+  await db.delete('relationships', id);
+  
+  // Delete the scenario itself
+  await db.delete('scenarios', id);
+}
+
 export async function getMessagesForScenario(scenarioId: string, limit = 100): Promise<Message[]> {
   const db = await getDB();
   const tx = db.transaction('messages', 'readonly');
@@ -180,5 +213,122 @@ export async function initializeDefaults(): Promise<void> {
   const hasTheme = await db.get('settings', 'theme');
   if (!hasTheme) {
     await db.put('settings', 'dark', 'theme');
+  }
+}
+
+/**
+ * Export all data from the database as an ExportData object.
+ * This includes characters, scenarios, messages, memories, relationships, and providers.
+ */
+export async function exportAllData(): Promise<ExportData> {
+  const db = await getDB();
+  
+  const [characters, scenarios, messages, memories, relationships, providers] = await Promise.all([
+    db.getAll('characters'),
+    db.getAll('scenarios'),
+    db.getAll('messages'),
+    db.getAll('memories'),
+    db.getAll('relationships'),
+    db.getAll('providers')
+  ]);
+  
+  // Get all settings as an object
+  const settings: Record<string, any> = {};
+  const settingsTx = db.transaction('settings', 'readonly');
+  const settingsCursor = await settingsTx.store.openCursor();
+  while (settingsCursor) {
+    settings[settingsCursor.key as string] = settingsCursor.value;
+    await settingsCursor.continue();
+  }
+  await settingsTx.done;
+  
+  return {
+    version: '1.0.0',
+    exportedAt: Date.now(),
+    characters,
+    scenarios,
+    messages,
+    memories,
+    relationships,
+    providers,
+    settings
+  };
+}
+
+/**
+ * Import data from an ExportData object into the database.
+ * This merges with existing data, preferring imported data on conflict.
+ */
+export async function importAllData(data: ExportData): Promise<void> {
+  const db = await getDB();
+  
+  // Import characters
+  if (data.characters?.length > 0) {
+    const tx = db.transaction('characters', 'readwrite');
+    for (const char of data.characters) {
+      char.updatedAt = Date.now();
+      await tx.store.put(char);
+    }
+    await tx.done;
+  }
+  
+  // Import scenarios
+  if (data.scenarios?.length > 0) {
+    const tx = db.transaction('scenarios', 'readwrite');
+    for (const scenario of data.scenarios) {
+      scenario.updatedAt = Date.now();
+      await tx.store.put(scenario);
+    }
+    await tx.done;
+  }
+  
+  // Import messages
+  if (data.messages?.length > 0) {
+    const tx = db.transaction('messages', 'readwrite');
+    for (const msg of data.messages) {
+      await tx.store.put(msg);
+    }
+    await tx.done;
+  }
+  
+  // Import memories
+  if (data.memories?.length > 0) {
+    const tx = db.transaction('memories', 'readwrite');
+    for (const mem of data.memories) {
+      mem.lastUpdated = Date.now();
+      await tx.store.put(mem);
+    }
+    await tx.done;
+  }
+  
+  // Import relationships
+  if (data.relationships?.length > 0) {
+    const tx = db.transaction('relationships', 'readwrite');
+    for (const rel of data.relationships) {
+      rel.updatedAt = Date.now();
+      await tx.store.put(rel);
+    }
+    await tx.done;
+  }
+  
+  // Import providers (skip default pollinations to preserve embedded key)
+  if (data.providers?.length > 0) {
+    const tx = db.transaction('providers', 'readwrite');
+    for (const provider of data.providers) {
+      // Skip Pollinations provider to preserve embedded key
+      if (provider.type !== 'pollinations') {
+        await tx.store.put(provider);
+      }
+    }
+    await tx.done;
+  }
+  
+  // Import settings
+  if (data.settings) {
+    const tx = db.transaction('settings', 'readwrite');
+    for (const [key, value] of Object.entries(data.settings)) {
+      await tx.store.put(value, key);
+    }
+    await tx.done;
   }
 }
