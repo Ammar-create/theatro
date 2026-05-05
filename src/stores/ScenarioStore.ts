@@ -27,8 +27,9 @@ class ScenarioStore {
     appEvents.emit('scenarios:loaded', this.getAll());
   }
 
-  get all(): Scenario[] {
-    return Array.from(this.scenarios.values()).sort((a, b) => 
+  /** Returns all scenarios sorted by most recent first */
+  getAll(): Scenario[] {
+    return Array.from(this.scenarios.values()).sort((a, b) =>
       (b.lastMessageAt || b.createdAt) - (a.lastMessageAt || a.createdAt)
     );
   }
@@ -39,6 +40,11 @@ class ScenarioStore {
 
   get current(): Scenario | null {
     return this.currentScenario;
+  }
+
+  /** Fetch messages for a given scenario from the database */
+  async getMessages(scenarioId: string, limit = 100): Promise<Message[]> {
+    return getMessagesForScenario(scenarioId, limit);
   }
 
   async create(data: {
@@ -102,7 +108,7 @@ class ScenarioStore {
   }
 
   async updateSettings(
-    id: string, 
+    id: string,
     settings: Partial<Scenario['settings']>
   ): Promise<Scenario | undefined> {
     const scenario = this.scenarios.get(id);
@@ -123,9 +129,9 @@ class ScenarioStore {
     if (!scenario) return undefined;
 
     // Activate new
-    const updated = await this.update(id, { 
-      isActive: true, 
-      lastMessageAt: Date.now() 
+    const updated = await this.update(id, {
+      isActive: true,
+      lastMessageAt: Date.now()
     });
 
     if (updated) {
@@ -164,7 +170,7 @@ class ScenarioStore {
   // ===== BRANCHING =====
 
   async branch(
-    scenarioId: string, 
+    scenarioId: string,
     messageId?: string,
     newName?: string
   ): Promise<Scenario | undefined> {
@@ -173,7 +179,7 @@ class ScenarioStore {
 
     // Get messages up to branch point
     const messages = await getMessagesForScenario(scenarioId, 1000);
-    
+
     // Create branched scenario
     const branched = await this.create({
       name: newName || `${original.name}-2`,
@@ -184,13 +190,13 @@ class ScenarioStore {
     });
 
     // Copy summary
-    await this.update(branched.id, { 
-      summary: original.summary + '\n[BRANCHED FROM ORIGINAL]' 
+    await this.update(branched.id, {
+      summary: original.summary + '\n[BRANCHED FROM ORIGINAL]'
     });
 
     // Copy messages up to branch point (if messageId provided)
     // Otherwise copy all messages
-    const messagesToCopy = messageId 
+    const messagesToCopy = messageId
       ? messages.filter(m => m.timestamp <= (messages.find(m => m.id === messageId)?.timestamp || 0))
       : messages;
 
@@ -271,9 +277,9 @@ class ScenarioStore {
       return true;
     } catch (error) {
       console.error('Import failed:', error);
-      appEvents.emit('toast', { 
-        message: 'Import failed: ' + (error as Error).message, 
-        type: 'error' 
+      appEvents.emit('toast', {
+        message: 'Import failed: ' + (error as Error).message,
+        type: 'error'
       });
       return false;
     }
