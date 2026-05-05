@@ -1,6 +1,3 @@
-import { characterStore } from './CharacterStore.js';
-import { scenarioStore } from './ScenarioStore.js';
-
 export { characterStore } from './CharacterStore.js';
 export { scenarioStore } from './ScenarioStore.js';
 export { chatStore } from './ChatStore.js';
