@@ -1,7 +1,6 @@
 // ===== CONTROLLERS SERVICE =====
 import { 
-  Scenario, Message, RelationshipMatrix, 
-  Directive, ControllerType 
+  Scenario, Message, RelationshipMatrix, ControllerType 
 } from '../types/index.js';
 import { streamChat, getDefaultProvider } from './providers.js';
 import { buildControllerPrompt } from './promptBuilder.js';
@@ -30,13 +29,13 @@ class MainControllerAdapter implements ControllerAdapter {
     const provider = await getDefaultProvider();
     if (provider) {
       this.providerId = provider.id;
-      this.model = 'grok-4.1-thinking'; // Upgrade if Aqua available
+      this.model = 'grok-4.1-thinking';
     }
 
     const prompt = await buildControllerPrompt('main', {
       scenario,
       messages,
-      characters: [], // Will be loaded
+      characters: [],
       relationships
     });
 
@@ -228,8 +227,6 @@ class MediaControllerAdapter implements ControllerAdapter {
     relationships: RelationshipMatrix | undefined,
     directive?: any
   ): AsyncGenerator<string> {
-    // Media controller doesn't stream - it triggers side effects
-    // This is a placeholder - actual image/voice handled in providers.ts
     yield JSON.stringify({
       type: 'media_trigger',
       mediaType: directive?.mediaType || 'image',
