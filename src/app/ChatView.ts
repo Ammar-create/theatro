@@ -22,41 +22,41 @@ export class ChatView {
   }
 
   private render(): void {
-    this.container.innerHTML = `
-      <div class="chat-view">
-        <header class="chat-header">
-          <div class="header-left">
-            <button class="btn-back" id="btn-back">${appIcons.arrowLeft({ size: 20 })}</button>
-            <div class="scenario-info">
-              <h2>${this.scenario.name}</h2>
-              <span class="character-count">${this.scenario.characterIds.length} characters</span>
-            </div>
-          </div>
-          <div class="header-actions">
-            <button class="btn-auto-scenario" id="btn-auto-scenario" title="Auto Scenario">${appIcons.play({ size: 18 })}</button>
-            <button class="btn-sidepanel" id="btn-sidepanel" title="Director Console">${appIcons.menu({ size: 20 })}</button>
-          </div>
-        </header>
-        <div class="chat-layout">
-          <div class="messages-container" id="messages"></div>
-          <div class="input-area">
-            <div class="input-toolbar">
-              <button class="btn-mic" id="btn-mic" title="Voice">${appIcons.mic({ size: 18 })}</button>
-              <button class="btn-auto-improve" id="btn-auto-improve" title="Auto Improve">${appIcons.sparkles({ size: 18 })}</button>
-            </div>
-            <div class="input-container">
-              <textarea id="message-input" placeholder="Type your message..." rows="1"></textarea>
-              <button class="btn-send" id="btn-send">${appIcons.send({ size: 20 })}</button>
-            </div>
-            <div class="input-hint"><span>Use *actions* and "dialogue"</span></div>
-          </div>
-        </div>
-        <div class="side-panel-container" id="side-panel"></div>
-      </div>
-    `;
+    var that = this;
+    this.container.innerHTML =
+      '<div class="chat-view">' +
+        '<header class="chat-header">' +
+          '<div class="header-left">' +
+            '<button class="btn-back" id="btn-back">' + appIcons.arrowLeft({ size: 20 }) + '</button>' +
+            '<div class="scenario-info">' +
+              '<h2>' + that.scenario.name + '</h2>' +
+              '<span class="character-count">' + that.scenario.characterIds.length + ' characters</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="header-actions">' +
+            '<button class="btn-auto-scenario" id="btn-auto-scenario" title="Auto Scenario">' + appIcons.play({ size: 18 }) + '</button>' +
+            '<button class="btn-sidepanel" id="btn-sidepanel" title="Director Console">' + appIcons.menu({ size: 20 }) + '</button>' +
+          '</div>' +
+        '</header>' +
+        '<div class="chat-layout">' +
+          '<div class="messages-container" id="messages"></div>' +
+          '<div class="input-area">' +
+            '<div class="input-toolbar">' +
+              '<button class="btn-mic" id="btn-mic" title="Voice">' + appIcons.mic({ size: 18 }) + '</button>' +
+              '<button class="btn-auto-improve" id="btn-auto-improve" title="Auto Improve">' + appIcons.sparkles({ size: 18 }) + '</button>' +
+            '</div>' +
+            '<div class="input-container">' +
+              '<textarea id="message-input" placeholder="Type your message..." rows="1"></textarea>' +
+              '<button class="btn-send" id="btn-send">' + appIcons.send({ size: 20 }) + '</button>' +
+            '</div>' +
+            '<div class="input-hint"><span>Use *actions* and dialogue</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="side-panel-container" id="side-panel"></div>' +
+      '</div>';
 
     this.messageContainer = this.container.querySelector('#messages');
-    const sidePanelContainer = this.container.querySelector('#side-panel');
+    var sidePanelContainer = this.container.querySelector('#side-panel');
     if (sidePanelContainer) {
       this.sidePanel = new SidePanel(sidePanelContainer as HTMLElement, this.scenario);
     }
@@ -64,45 +64,54 @@ export class ChatView {
 
   private async loadMessages(): Promise<void> {
     await chatStore.loadMessages(this.scenario.id);
-    const messages = chatStore.getMessages();
-    messages.forEach(msg => this.renderMessage(msg));
+    var messages = chatStore.getMessages();
+    messages.forEach(function(msg: any) { this.renderMessage(msg); }.bind(this));
   }
 
-  private renderMessage(msg: any, streaming = false): void {
+  private renderMessage(msg: any, streaming?: boolean): void {
     if (!this.messageContainer) return;
+    var s = streaming || false;
 
-    const character = characterStore.get(msg.characterId);
-    const color = character?.color || '#888';
+    var character = characterStore.get(msg.characterId);
+    var color = character ? character.color : '#888';
 
-    const msgEl = document.createElement('div');
-    msgEl.className = `message ${character?.isUser ? 'user' : ''} ${streaming ? 'streaming' : ''}`;
-    msgEl.id = `msg-${msg.id}`;
+    var msgEl = document.createElement('div');
+    msgEl.className = 'message' + (character && character.isUser ? ' user' : '') + (s ? ' streaming' : '');
+    msgEl.id = 'msg-' + msg.id;
     msgEl.style.setProperty('--character-color', color);
 
-    const actions = msg.actions?.map((a: string) => `<span class="action">*${a}*</span>`).join(' ') || '';
-    const dialogue = msg.dialogue ? `<span class="dialogue" style="color: ${color}">"${msg.dialogue}"</span>` : '';
+    var actionsHtml = '';
+    if (msg.actions) {
+      actionsHtml = msg.actions.map(function(a: string) { return '<span class="action">*' + a + '*</span>'; }).join(' ');
+    }
+    var dialogueHtml = '';
+    if (msg.dialogue) {
+      dialogueHtml = '<span class="dialogue" style="color: ' + color + '">' + msg.dialogue + '</span>';
+    }
 
-    msgEl.innerHTML = `
-      <div class="message-header">
-        <span class="message-author" style="color: ${color}">${character?.name || 'Unknown'}</span>
-        ${msg.edited ? '<span class="edited">edited</span>' : ''}
-      </div>
-      <div class="message-content">
-        ${actions ? `<div class="actions">${actions}</div>` : ''}
-        ${dialogue ? `<div class="dialogue-wrapper">${dialogue}</div>` : ''}
-        ${!actions && !dialogue ? `<div class="raw-content">${msg.content}</div>` : ''}
-      </div>
-      <div class="message-actions">
-        ${streaming ? '<span class="streaming-indicator">...</span>' : ''}
-        <button class="btn-msg-action" data-action="image" title="Generate Image">${appIcons.image({ size: 14 })}</button>
-        <button class="btn-msg-action" data-action="voice" title="Voice">${appIcons.volume({ size: 14 })}</button>
-        <button class="btn-msg-action" data-action="regenerate" title="Regenerate">${appIcons.refresh({ size: 14 })}</button>
-        <button class="btn-msg-action" data-action="branch" title="Branch">${appIcons.branch({ size: 14 })}</button>
-      </div>
-    `;
+    msgEl.innerHTML =
+      '<div class="message-header">' +
+        '<span class="message-author" style="color: ' + color + '">' + (character ? character.name : 'Unknown') + '</span>' +
+        (msg.edited ? '<span class="edited">edited</span>' : '') +
+      '</div>' +
+      '<div class="message-content">' +
+        (actionsHtml ? '<div class="actions">' + actionsHtml + '</div>' : '') +
+        (dialogueHtml ? '<div class="dialogue-wrapper">' + dialogueHtml + '</div>' : '') +
+        (!actionsHtml && !dialogueHtml ? '<div class="raw-content">' + msg.content + '</div>' : '') +
+      '</div>' +
+      '<div class="message-actions">' +
+        (s ? '<span class="streaming-indicator">...</span>' : '') +
+        '<button class="btn-msg-action" data-action="image" title="Generate Image">' + appIcons.image({ size: 14 }) + '</button>' +
+        '<button class="btn-msg-action" data-action="voice" title="Voice">' + appIcons.volume({ size: 14 }) + '</button>' +
+        '<button class="btn-msg-action" data-action="regenerate" title="Regenerate">' + appIcons.refresh({ size: 14 }) + '</button>' +
+        '<button class="btn-msg-action" data-action="branch" title="Branch">' + appIcons.branch({ size: 14 }) + '</button>' +
+      '</div>';
 
-    msgEl.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', (e) => this.handleMessageAction((e.currentTarget as HTMLElement).dataset.action!, msg));
+    var self = this;
+    msgEl.querySelectorAll('[data-action]').forEach(function(btn: Element) {
+      btn.addEventListener('click', function(e: Event) {
+        self.handleMessageAction((e.currentTarget as HTMLElement).dataset.action!, msg);
+      });
     });
 
     this.messageContainer.appendChild(msgEl);
@@ -110,71 +119,71 @@ export class ChatView {
   }
 
   private setupEventListeners(): void {
-    this.container.querySelector('#btn-back')?.addEventListener('click', () => appState.setView('dashboard'));
+    var self = this;
 
-    const sendBtn = this.container.querySelector('#btn-send');
-    const input = this.container.querySelector('#message-input') as HTMLTextAreaElement;
+    this.container.querySelector('#btn-back')?.addEventListener('click', function() { appState.setView('dashboard'); });
 
-    sendBtn?.addEventListener('click', () => this.sendMessage(input?.value || ''));
-    input?.addEventListener('keydown', (e) => {
+    var sendBtn = this.container.querySelector('#btn-send');
+    var input = this.container.querySelector('#message-input') as HTMLTextAreaElement;
+
+    sendBtn?.addEventListener('click', function() { self.sendMessage(input ? input.value : ''); });
+    input?.addEventListener('keydown', function(e: KeyboardEvent) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        this.sendMessage(input.value);
+        self.sendMessage(input.value);
       }
     });
 
-    input?.addEventListener('input', () => {
+    input?.addEventListener('input', function() {
       input.style.height = 'auto';
-      input.style.height = `${Math.min(input.scrollHeight, 200)}px`;
+      input.style.height = Math.min(input.scrollHeight, 200) + 'px';
     });
 
-    this.container.querySelector('#btn-sidepanel')?.addEventListener('click', () => appState.toggleSidePanel());
-    this.container.querySelector('#btn-auto-scenario')?.addEventListener('click', () => {
+    this.container.querySelector('#btn-sidepanel')?.addEventListener('click', function() { appState.toggleSidePanel(); });
+    this.container.querySelector('#btn-auto-scenario')?.addEventListener('click', function() {
       chatStore.toggleAutoScenario();
     });
 
-    appEvents.on('chat:message-added', (msg) => this.renderMessage(msg));
-    appEvents.on('streaming:start', ({ messageId, characterId }) => {
-      this.streamingMessageId = messageId;
-      this.renderMessage({ id: messageId, characterId, content: '', actions: [], dialogue: '', timestamp: Date.now() }, true);
+    appEvents.on('chat:message-added', function(msg: any) { self.renderMessage(msg); });
+    appEvents.on('streaming:start', function(data: { messageId: string; characterId: string }) {
+      self.streamingMessageId = data.messageId;
+      self.renderMessage({ id: data.messageId, characterId: data.characterId, content: '', actions: [], dialogue: '', timestamp: Date.now() }, true);
     });
-    appEvents.on('streaming:chunk', ({ messageId, chunk }) => {
-      if (messageId !== this.streamingMessageId) return;
-      const msgEl = this.container.querySelector(`#msg-${messageId}`);
-      const content = msgEl?.querySelector('.raw-content, .dialogue-wrapper');
-      if (content) content.textContent += chunk;
+    appEvents.on('streaming:chunk', function(data: { messageId: string; chunk: string }) {
+      if (data.messageId !== self.streamingMessageId) return;
+      var msgEl = self.container.querySelector('#msg-' + data.messageId);
+      var content = msgEl?.querySelector('.raw-content, .dialogue-wrapper');
+      if (content) content.textContent += data.chunk;
     });
-    appEvents.on('streaming:end', ({ messageId }) => {
-      const msgEl = this.container.querySelector(`#msg-${messageId}`);
+    appEvents.on('streaming:end', function(data: { messageId: string }) {
+      var msgEl = self.container.querySelector('#msg-' + data.messageId);
       if (msgEl) {
         msgEl.classList.remove('streaming');
-        msgEl.querySelector('.streaming-indicator')?.remove();
+        var indicator = msgEl.querySelector('.streaming-indicator');
+        if (indicator) indicator.remove();
       }
-      this.streamingMessageId = null;
+      self.streamingMessageId = null;
     });
   }
 
   private async sendMessage(content: string): Promise<void> {
     if (!content.trim()) return;
 
-    const input = this.container.querySelector('#message-input') as HTMLTextAreaElement;
+    var input = this.container.querySelector('#message-input') as HTMLTextAreaElement;
     if (input) input.value = '';
 
-    const actions: string[] = [];
-    let dialogue = '';
-    let text = content;
+    var actions: string[] = [];
+    var dialogue = '';
 
-    const actionRegex = /\*([^*]+)\*/g;
-    let match;
+    var actionRegex = /\*([^*]+)\*/g;
+    var match;
     while ((match = actionRegex.exec(content)) !== null) {
       actions.push(match[1].trim());
-      text = text.replace(match[0], '');
     }
 
-    const dialogueRegex = /"([^"]+)"/g;
+    var dialogueRegex = /"([^"]+)"/g;
     while ((match = dialogueRegex.exec(content)) !== null) {
       dialogue = match[1];
-      text = text.replace(match[0], '');
     }
 
     await chatStore.sendUserMessage(content.trim(), dialogue, actions);
@@ -185,28 +194,22 @@ export class ChatView {
       case 'image':
         try {
           appEvents.emit('toast', { message: 'Generating...', type: 'info' });
-          const url = await generateImage(`Scene: ${msg.content.slice(0, 200)}`);
-          this.modal.show({ title: 'Generated', content: `<img src="${url}" style="max-width: 100%; border-radius: 8px;" />`, showCancel: false, confirmText: 'Close' });
+          var url = await generateImage('Scene: ' + msg.content.slice(0, 200));
+          this.modal.show({ title: 'Generated', content: '<img src="' + url + '" style="max-width: 100%; border-radius: 8px;" />', showCancel: false, confirmText: 'Close' });
         } catch (e) {
           appEvents.emit('toast', { message: 'Image failed', type: 'error' });
         }
         break;
       case 'branch':
         try {
-          const branched = await scenarioStore.branch(this.scenario.id);
-          appEvents.emit('toast', { message: `Created "${branched?.name}"`, type: 'success' });
+          var branched = await scenarioStore.branch(this.scenario.id);
+          appEvents.emit('toast', { message: 'Created ' + (branched ? branched.name : 'branch'), type: 'success' });
         } catch (e) {
           appEvents.emit('toast', { message: 'Branch failed', type: 'error' });
         }
         break;
       case 'voice':
-        try {
-          appEvents.emit('toast', { message: 'Generating voice...', type: 'info' });
-          // Voice generation will be wired up when providers are ready
-          appEvents.emit('toast', { message: 'Voice coming soon', type: 'info' });
-        } catch (e) {
-          appEvents.emit('toast', { message: 'Voice failed', type: 'error' });
-        }
+        appEvents.emit('toast', { message: 'Voice coming soon', type: 'info' });
         break;
       case 'regenerate':
         appEvents.emit('toast', { message: 'Regenerate coming soon', type: 'info' });
