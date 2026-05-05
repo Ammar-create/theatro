@@ -1,6 +1,6 @@
 import { Message, ChatMessage, Character, Scenario } from '../types/index.js';
 import { scenarioStore } from './ScenarioStore.js';
-import { appEvents, appState } from './index.js';
+import { appEvents } from './appState.js';
 import { TurnQueueManager } from '../services/turnQueue.js';
 import { getMessagesForScenario, saveMessage } from '../core/storage.js';
 
@@ -106,18 +106,16 @@ class ChatStore {
       return;
     }
 
-    // Find the user character in this scenario
-    const userCharId = Array.from(this.currentScenario.characterIds).find(cid => {
-      // characterStore.get lives in CharacterStore, imported via scenarioStore context
-      const characters = this.currentScenario?.characterIds || [];
-      return false; // Will resolve from turnQueue's character lookup
-    });
+    // Detect the user character — lazy import to avoid circular deps
+    const { characterStore } = await import('./CharacterStore.js');
+    const userChar = characterStore.getUserCharacter();
+    const userCharId = userChar?.id || this.currentScenario.characterIds[0];
 
     // Push into turn queue — the TurnQueueManager will create the message
     this.turnQueue.addToQueue({
       id: `user_${Date.now()}`,
       type: 'user',
-      characterId: this.currentScenario.characterIds[0], // Use first character as fallback
+      characterId: userCharId,
       content,
       actions,
       dialogue,
