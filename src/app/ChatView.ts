@@ -66,7 +66,7 @@ export class ChatView {
   private async loadMessages(): Promise<void> {
     await chatStore.loadMessages(this.scenario.id);
     var messages = chatStore.getMessages();
-    messages.forEach(function(msg: Message) { this.renderMessage(msg); }.bind(this));
+    messages.forEach((msg: Message) => { this.renderMessage(msg); });
   }
 
   private renderMessage(msg: Message, streaming?: boolean): void {
@@ -182,7 +182,7 @@ export class ChatView {
       actions.push(match[1].trim());
     }
 
-    var dialogueRegex = /"([^"]+)"/g;
+    var dialogueRegex = /\"([^\"]+)\"/g;
     while ((match = dialogueRegex.exec(content)) !== null) {
       dialogue = match[1];
     }
