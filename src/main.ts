@@ -1,6 +1,5 @@
-// Theatro — Main Entry Point
-import { initializeDefaults, getDB } from './core/storage.js';
-import { App } from './app/index.js';
+import { getDB, initializeDefaults } from './core/storage.js';
+import { App } from './app/App.js';
 
 async function main() {
   try {
@@ -11,7 +10,7 @@ async function main() {
     await getDB();
     
     // Initialize and mount the application
-    const app = new App(document.getElementById('app')!);
+    const app = new App();
     await app.init();
     
     // Remove loading screen
