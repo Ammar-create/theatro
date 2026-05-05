@@ -1,10 +1,13 @@
 import { Message, ChatMessage } from '../types/index.js';
 import { scenarioStore } from './ScenarioStore.js';
 import { appEvents } from './index.js';
+import { TurnQueueManager } from '../services/turnQueue.js';
+import { Character, Scenario } from '../types/index.js';
 
 class ChatStore {
   private messages: Message[] = [];
   private isStreaming = false;
+  private turnQueue: TurnQueueManager | null = null;
 
   async loadMessages(scenarioId: string): Promise<void> {
     this.messages = await scenarioStore.getMessages(scenarioId);
@@ -39,6 +42,22 @@ class ChatStore {
 
   clear(): void {
     this.messages = [];
+  }
+
+  initializeTurnQueue(scenario: Scenario, characters: Character[]): void {
+    this.turnQueue = new TurnQueueManager(scenario, characters);
+  }
+
+  pauseAutoScenario(scenarioId: string): void {
+    if (this.turnQueue) {
+      this.turnQueue.pause();
+    }
+  }
+
+  resumeAutoScenario(scenarioId: string): void {
+    if (this.turnQueue) {
+      this.turnQueue.resume();
+    }
   }
 }
 
