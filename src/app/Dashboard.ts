@@ -136,7 +136,7 @@ export class Dashboard {
   }
 
   private showNewScenarioModal(characters: any[]): void {
-    const userChar = characters.find(c => c.isUser);
+    const userChar = characters.find((c: any) => c.isUser);
 
     this.modal.show({
       title: 'Create New Scenario',
@@ -152,7 +152,7 @@ export class Dashboard {
         <div class="form-group">
           <label>Characters</label>
           <div class="character-select">
-            ${characters.map(c => `
+            ${characters.map((c: any) => `
               <label class="char-checkbox">
                 <input type="checkbox" value="${c.id}" ${c.isUser ? 'checked disabled' : ''} />
                 <span style="color: ${c.color}">${c.name}</span>
@@ -252,11 +252,8 @@ export class Dashboard {
           return false;
         }
 
-        if (isUser) {
-          await characterStore.setAsUser(''); // Unset existing
-        }
-
-        await characterStore.create({
+        // Create the character first
+        const newChar = await characterStore.create({
           name,
           color,
           personality,
@@ -264,22 +261,34 @@ export class Dashboard {
           isUser
         });
 
+        // If this is the user character, set it properly
+        if (isUser) {
+          await characterStore.setAsUser(newChar.id);
+        }
+
         appEvents.emit('toast', { message: `Created ${name}`, type: 'success' });
         this.render();
         this.setupListeners();
       }
     });
 
-    // Color picker
+    // Color picker - setup after modal renders
     setTimeout(() => {
       document.querySelectorAll('.color-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
           document.querySelectorAll('.color-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
-          (document.querySelector('#char-color') as HTMLInputElement)!.value = (btn as HTMLElement).dataset.color!;
+          const colorInput = document.querySelector('#char-color') as HTMLInputElement;
+          if (colorInput) {
+            colorInput.value = (btn as HTMLElement).dataset.color || colors[0];
+          }
         });
       });
-    }, 10);
+      // Set first color as active
+      const firstColorBtn = document.querySelector('.color-btn');
+      if (firstColorBtn) firstColorBtn.classList.add('active');
+    }, 100);
   }
 
   destroy(): void {
