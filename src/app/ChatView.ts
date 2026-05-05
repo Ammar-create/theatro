@@ -65,7 +65,7 @@ export class ChatView {
   private async loadMessages(): Promise<void> {
     await chatStore.loadMessages(this.scenario.id);
     const messages = chatStore.getMessages();
-    messages.reverse().forEach(msg => this.renderMessage(msg));
+    messages.forEach(msg => this.renderMessage(msg));
   }
 
   private renderMessage(msg: any, streaming = false): void {
@@ -130,8 +130,7 @@ export class ChatView {
 
     this.container.querySelector('#btn-sidepanel')?.addEventListener('click', () => appState.toggleSidePanel());
     this.container.querySelector('#btn-auto-scenario')?.addEventListener('click', () => {
-      scenarioStore.toggleAutoScenario();
-      appEvents.emit('toast', { message: 'Auto-scenario toggled', type: 'info' });
+      chatStore.toggleAutoScenario();
     });
 
     appEvents.on('chat:message-added', (msg) => this.renderMessage(msg));
@@ -178,7 +177,7 @@ export class ChatView {
       text = text.replace(match[0], '');
     }
 
-    await scenarioStore.sendUserMessage(content.trim(), dialogue, actions);
+    await chatStore.sendUserMessage(content.trim(), dialogue, actions);
   }
 
   private async handleMessageAction(action: string, msg: any): Promise<void> {
@@ -199,6 +198,18 @@ export class ChatView {
         } catch (e) {
           appEvents.emit('toast', { message: 'Branch failed', type: 'error' });
         }
+        break;
+      case 'voice':
+        try {
+          appEvents.emit('toast', { message: 'Generating voice...', type: 'info' });
+          // Voice generation will be wired up when providers are ready
+          appEvents.emit('toast', { message: 'Voice coming soon', type: 'info' });
+        } catch (e) {
+          appEvents.emit('toast', { message: 'Voice failed', type: 'error' });
+        }
+        break;
+      case 'regenerate':
+        appEvents.emit('toast', { message: 'Regenerate coming soon', type: 'info' });
         break;
       default:
         appEvents.emit('toast', { message: 'Coming soon', type: 'info' });
