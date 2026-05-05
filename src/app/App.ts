@@ -1,16 +1,26 @@
 import { initializeStores, appEvents } from '../stores/index.js';
 import { Dashboard } from './Dashboard.js';
+import { ChatView } from './ChatView.js';
 import type { Scenario } from '../types/index.js';
 
 export class App {
   private container: HTMLElement;
   private dashboard: Dashboard | null = null;
+  private chatView: ChatView | null = null;
   private currentView: 'dashboard' | 'chat' = 'dashboard';
+  private toastContainer: HTMLElement | null = null;
 
   constructor() {
     const el = document.getElementById('app');
     if (!el) throw new Error('App container not found');
     this.container = el;
+    this.createToastContainer();
+  }
+
+  private createToastContainer() {
+    this.toastContainer = document.createElement('div');
+    this.toastContainer.className = 'toast-container';
+    document.body.appendChild(this.toastContainer);
   }
 
   async init(): Promise<void> {
@@ -45,6 +55,11 @@ export class App {
       this.renderDashboard();
     });
 
+    // Toast events
+    appEvents.on('toast', ({ message, type }: { message: string; type: string }) => {
+      this.showToast(message, type as any);
+    });
+
     // Escape key handling
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.currentView === 'chat') {
@@ -53,14 +68,34 @@ export class App {
     });
   }
 
+  private showToast(message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') {
+    if (!this.toastContainer) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    this.toastContainer.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(20px)';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
   private renderDashboard(): void {
     this.currentView = 'dashboard';
     this.container.innerHTML = '';
     this.container.className = 'theatro-layout dashboard-view';
     
-    // Clean up previous dashboard
+    // Clean up previous views
     if (this.dashboard) {
       this.dashboard.destroy();
+      this.dashboard = null;
+    }
+    if (this.chatView) {
+      this.chatView.destroy();
+      this.chatView = null;
     }
     
     this.dashboard = new Dashboard(this.container);
@@ -71,27 +106,15 @@ export class App {
     this.container.innerHTML = '';
     this.container.className = 'theatro-layout chat-view';
 
-    // Placeholder chat view - will be built in next iteration
-    this.container.innerHTML = `
-      <div class="chat-placeholder">
-        <div class="chat-header">
-          <button class="btn btn-outline" id="back-to-dashboard">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M19 12H5M12 19l-7-7 7-7"/>
-            </svg>
-            Back
-          </button>
-          <h2>${scenario.name}</h2>
-        </div>
-        <div class="chat-messages">
-          <p>Chat view for "${scenario.name}" coming next...</p>
-        </div>
-      </div>
-    `;
+    // Clean up previous views
+    if (this.dashboard) {
+      this.dashboard.destroy();
+      this.dashboard = null;
+    }
+    if (this.chatView) {
+      this.chatView.destroy();
+    }
 
-    // Back button handler
-    this.container.querySelector('#back-to-dashboard')?.addEventListener('click', () => {
-      this.renderDashboard();
-    });
+    this.chatView = new ChatView(this.container, scenario);
   }
 }
