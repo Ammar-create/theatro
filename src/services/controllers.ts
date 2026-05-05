@@ -24,7 +24,7 @@ class MainControllerAdapter implements ControllerAdapter {
     scenario: Scenario,
     messages: Message[],
     relationships: RelationshipMatrix | undefined,
-    directive?: string
+    _directive?: string
   ): AsyncGenerator<string> {
     const provider = await getDefaultProvider();
     if (provider) {
@@ -39,7 +39,6 @@ class MainControllerAdapter implements ControllerAdapter {
       relationships
     });
 
-    // streamChat returns Promise<AsyncGenerator> — await, then yield*
     const generator = await streamChat({
       model: this.model,
       messages: [
