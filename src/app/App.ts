@@ -52,10 +52,10 @@ export class App {
       this.renderSettings();
     });
 
-    appEvents.on('view:changed', ({ view }: { view: 'dashboard' | 'chat' | 'settings', scenario?: Scenario }) => {
+    appEvents.on('view:changed', ({ view, scenario }: { view: 'dashboard' | 'chat' | 'settings'; scenario?: Scenario }) => {
       if (view === 'settings') this.renderSettings();
       if (view === 'dashboard') this.renderDashboard();
-      if (view === 'chat' && view.scenario) this.renderChat(view.scenario);
+      if (view === 'chat' && scenario) this.renderChat(scenario);
     });
 
     appEvents.on('toast', ({ message, type }: { message: string; type: string }) => {
