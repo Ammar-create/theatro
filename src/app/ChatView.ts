@@ -73,7 +73,7 @@ export class ChatView {
     if (!this.messageContainer) return;
     var s = streaming || false;
 
-    var character = characterStore.get(msg.characterId);
+    var character = msg.characterId ? characterStore.get(msg.characterId) : undefined;
     var color = character ? character.color : '#888';
 
     var msgEl = document.createElement('div');
