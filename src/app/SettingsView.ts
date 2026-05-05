@@ -1,8 +1,10 @@
 import { appEvents, appState, characterStore, scenarioStore } from '../stores/index.js';
 import { Modal } from './Modal.js';
 import { appIcons } from '../assets/icons/index.js';
+import { cpu, fileJson, moon, sun } from '../assets/icons/part2.js';
 import { providerStore, settingsStore } from '../stores/index.js';
 import { exportAllData, importAllData } from '../core/exportImport.js';
+import { Provider } from '../types/index.js';
 
 export class SettingsView {
   private container: HTMLElement;
@@ -33,11 +35,11 @@ export class SettingsView {
               General
             </button>
             <button class="nav-item ${this.currentTab === 'providers' ? 'active' : ''}" data-tab="providers">
-              ${appIcons.cpu({ size: 18 })}
+              ${cpu({ width: 18, height: 18 })}
               Providers
             </button>
             <button class="nav-item ${this.currentTab === 'data' ? 'active' : ''}" data-tab="data">
-              ${appIcons.fileJson({ size: 18 })}
+              ${fileJson({ width: 18, height: 18 })}
               Data
             </button>
           </nav>
@@ -75,11 +77,11 @@ export class SettingsView {
           <label>Theme</label>
           <div class="theme-selector">
             <button class="theme-btn ${theme === 'dark' ? 'active' : ''}" data-theme="dark">
-              ${appIcons.moon({ size: 16 })}
+              ${moon({ width: 16, height: 16 })}
               Dark
             </button>
             <button class="theme-btn ${theme === 'light' ? 'active' : ''}" data-theme="light">
-              ${appIcons.sun({ size: 16 })}
+              ${sun({ width: 16, height: 16 })}
               Light
             </button>
           </div>
@@ -134,9 +136,9 @@ export class SettingsView {
   }
 
   private renderProvidersTab(): string {
+    const settings = settingsStore.getAll();
     const providers = providerStore.getAll();
-    const pollinationP = providers.find(p => p.type === 'pollinations');
-    const aquaP = providers.find(p => p.type === 'aqua');
+    const aquaP = providers.find((p: Provider) => p.type === 'aqua');
 
     return `
       <section class="settings-section">
@@ -223,7 +225,7 @@ export class SettingsView {
         <h2>Export</h2>
         <p class="section-desc">Export all your data as JSON. You can import it later or on another device.</p>
         <button class="btn-primary" id="btn-export">
-          ${appIcons.fileJson({ size: 16 })}
+          ${fileJson({ width: 16, height: 16 })}
           Export All Data
         </button>
       </section>
