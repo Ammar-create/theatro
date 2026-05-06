@@ -18,6 +18,7 @@ export class TurnQueueManager {
   private characters: Map<string, Character> = new Map();
   private messageCount = 0;
   private maxMessagesBeforeController = 10;
+  private processingTimeout: ReturnType<typeof setTimeout> | null = null;
   
   constructor(scenario: Scenario, characters: Character[]) {
     this.scenario = scenario;
@@ -34,6 +35,7 @@ export class TurnQueueManager {
 
   pause(): void {
     this.isPaused = true;
+    appEvents.emit('turn-queue:processing', { isProcessing: false });
   }
 
   resume(): void {
@@ -45,21 +47,40 @@ export class TurnQueueManager {
 
   clear(): void {
     this.queue = [];
+    if (this.processingTimeout) {
+      clearTimeout(this.processingTimeout);
+      this.processingTimeout = null;
+    }
   }
 
   getQueue(): TurnQueueItem[] {
     return [...this.queue];
   }
 
+  getIsProcessing(): boolean {
+    return this.isProcessing;
+  }
+
   private async processQueue(): Promise<void> {
     if (this.isProcessing || this.queue.length === 0) return;
     
     this.isProcessing = true;
+    appEvents.emit('turn-queue:processing', { isProcessing: true });
     
     while (this.queue.length > 0 && !this.isPaused) {
       const item = this.queue.shift()!;
       try {
-        await this.processItem(item);
+        // Use requestIdleCallback for non-blocking processing when available
+        if (typeof requestIdleCallback !== 'undefined' && item.type === 'character') {
+          await new Promise<void>((resolve) => {
+            requestIdleCallback(async () => {
+              await this.processItem(item);
+              resolve();
+            }, { timeout: 5000 });
+          });
+        } else {
+          await this.processItem(item);
+        }
       } catch (error) {
         console.error('Turn processing error:', error);
         appEvents.emit('toast', { message: `Error: ${error}`, type: 'error' });
@@ -67,6 +88,7 @@ export class TurnQueueManager {
     }
     
     this.isProcessing = false;
+    appEvents.emit('turn-queue:processing', { isProcessing: false });
   }
 
   private async processItem(item: TurnQueueItem): Promise<void> {
@@ -94,7 +116,8 @@ export class TurnQueueManager {
       content: item.content || '',
       actions: item.actions || [],
       dialogue: item.dialogue || '',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      isPrivateBetween: item.isPrivate ? item.privateWith : undefined
     };
     
     await saveMessage(msg);
@@ -193,9 +216,9 @@ export class TurnQueueManager {
         await this.triggerMainController();
       }
       
-      // Auto-scenario: continue
+      // Auto-scenario: continue with delay for natural pacing
       if (this.scenario.settings.autoScenario && !this.isPaused) {
-        setTimeout(() => this.selectNextCharacter(character.id), 500);
+        this.processingTimeout = setTimeout(() => this.selectNextCharacter(character.id), 800);
       }
       
     } catch (error) {
@@ -276,6 +299,12 @@ export class TurnQueueManager {
       formatted += msg.actions.map(a => `*${a}*`).join(' ') + '\n';
     }
     formatted += `"${msg.dialogue}"`;
+    
+    // Add private message context if applicable
+    if (msg.isPrivateBetween && msg.isPrivateBetween.length > 0) {
+      formatted += '\n[PRIVATE MESSAGE]';
+    }
+    
     return formatted;
   }
 
@@ -294,7 +323,7 @@ export class TurnQueueManager {
     
     // Extract dialogue: "quoted text"
     const dialogueRegex = /"([^"]+)"/g;
-    const dialogueMatches = dialogue.match(dialogueRegex);
+    const dialogueMatches = content.match(dialogueRegex);
     if (dialogueMatches) {
       dialogue = dialogueMatches.join(' ').replace(/"/g, '');
     }
