@@ -95,7 +95,9 @@ class ChatStore {
   async sendUserMessage(
     content: string,
     dialogue: string,
-    actions: string[]
+    actions: string[],
+    isWhisper: boolean = false,
+    whisperTargetIds: string[] = []
   ): Promise<void> {
     if (!this.currentScenario || !this.turnQueue) {
       appEvents.emit('toast', { message: 'No active scenario', type: 'error' });
@@ -113,10 +115,17 @@ class ChatStore {
       content,
       actions,
       dialogue,
+      isPrivate: isWhisper,
+      privateWith: isWhisper ? whisperTargetIds : undefined,
       timestamp: Date.now()
     });
 
-    appEvents.emit('message:sent', { content, dialogue, actions });
+    appEvents.emit('message:sent', { content, dialogue, actions, isWhisper, whisperTargetIds });
+  }
+
+  /** Check if background processing is active */
+  isBackgroundProcessing(): boolean {
+    return this.turnQueue?.getIsProcessing() || false;
   }
 
   clear(): void {
