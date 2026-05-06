@@ -211,6 +211,10 @@ export interface TurnQueueItem {
   dialogue?: string;
   /** Optional directive string passed to the character/controller for this turn */
   directive?: string;
+  /** Whether this is a private/whisper message */
+  isPrivate?: boolean;
+  /** Character IDs that this private message is visible to */
+  privateWith?: string[];
   timestamp: number;
 }
 
